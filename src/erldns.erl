@@ -30,4 +30,5 @@ start() ->
   application:start(ranch),
   application:start(cowboy),
   application:start(hottub),
+  application:start(egeoip),
   application:start(erldns).
