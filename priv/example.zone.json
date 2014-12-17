@@ -91,6 +91,18 @@
                 "data": {
                     "ip": "50.40.50.40"
                 }
+            },
+            {
+                "name": "example.com",
+                "type": "LOC",
+                "ttl": 3600,
+                "data": {
+                    "size": 0,
+                    "horizontal": 0,
+                    "vertical": 0,
+                    "latitude": 90,
+                    "longitude": 90
+                }
             }
 
         ]

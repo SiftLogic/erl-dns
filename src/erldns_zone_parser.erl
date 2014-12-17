@@ -347,6 +347,19 @@ json_record_to_erlang([Name, <<"NAPTR">>, Ttl, Data, _Context]) ->
                replacement = proplists:get_value(<<"replacement">>, Data)
               },
      ttl = Ttl};
+json_record_to_erlang([Name, <<"LOC">>, Ttl, Data, _Context]) ->
+    #dns_rr{
+        name = Name,
+        type = ?DNS_TYPE_LOC,
+        data = #dns_rrdata_loc{
+            size = proplists:get_value(<<"size">>, Data),
+            horiz = proplists:get_value(<<"horizontal">>, Data),
+            vert = proplists:get_value(<<"vertical">>, Data),
+            lon = proplists:get_value(<<"longitude">>, Data),
+            lat = proplists:get_value(<<"latitude">>, Data),
+            alt = proplists:get_value(<<"altitude">>, Data)
+        },
+        ttl = Ttl};
 
 json_record_to_erlang(_Data) ->
   %lager:debug("Cannot convert ~p", [Data]),
