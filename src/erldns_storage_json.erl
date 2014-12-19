@@ -16,30 +16,40 @@
 
 %% API
 -export([create/1,
-    insert/2,
-    delete_table/1,
-    delete/2,
-    backup_table/1,
-    backup_tables/0,
-    select/2,
-    select/3,
-    foldl/3,
-    empty_table/1]).
+         insert/2,
+         delete_table/1,
+         delete/2,
+         backup_table/1,
+         backup_tables/0,
+         select/2,
+         select/3,
+         foldl/3,
+         empty_table/1]).
 
 %% Public API
 %% @doc Create ets table wrapper. Use match cases for adding different options to the table.
--spec create(atom()) -> ok.
+-spec create(atom()) -> ok | {error, Reason :: term()}.
 create(zones) ->
     case ets:info(zones) of
         undefined ->
-               zones = ets:new(zones, [set, public, named_table]);
+            case ets:new(zones, [set, public, named_table]) of
+                zones ->
+                    ok;
+                Error ->
+                    {error, Error}
+            end;
         _InfoList ->
             ok
     end;
 create(authorities) ->
     case ets:info(authorities) of
         undefined ->
-            authorities = ets:new(authorities, [set, public, named_table]);
+            case ets:new(authorities, [set, public, named_table]) of
+                authorities ->
+                    ok;
+                Error ->
+                    {error, Error}
+            end;
         _InfoList ->
             ok
     end;
@@ -47,54 +57,77 @@ create(authorities) ->
 create(packet_cache) ->
     case ets:info(packet_cache) of
         undefined ->
-            packet_cache = ets:new(packet_cache, [set, public, named_table]);
+            case ets:new(packet_cache, [set, public, named_table]) of
+                packet_cache ->
+                    ok;
+                Error ->
+                    {error, Error}
+            end;
         _InfoList ->
             ok
     end;
 create(host_throttle) ->
     case ets:info(host_throttle) of
         undefined ->
-            host_throttle = ets:new(host_throttle, [set, public, named_table]);
+            case ets:new(host_throttle, [set, public, named_table]) of
+                host_throttle ->
+                    ok;
+                Error ->
+                    {error, Error}
+            end;
         _InfoList ->
             ok
     end;
 create(handler_registry) ->
     case ets:info(handler_registry) of
         undefined ->
-            handler_registry = ets:new(handler_registry, [set, public, named_table]);
+            case ets:new(handler_registry, [set, public, named_table]) of
+                handler_registry ->
+                    ok;
+                Error ->
+                    {error, Error}
+            end;
         _InfoList ->
             ok
     end.
 
 %% @doc Insert value in ets table.
--spec insert(atom(), tuple()) -> ok.
+-spec insert(atom(), tuple()) -> ok | {error, Reason :: term()}.
 insert(Table, Value)->
-    true = ets:insert(Table, Value),
-    ok.
+    case ets:insert(Table, Value) of
+        true ->
+            ok;
+        Error ->
+            {error, Error}
+    end.
 
 %% @doc Delete entire ets table.
--spec delete_table(atom()) -> true.
+-spec delete_table(atom()) -> ok | {error, Reason :: term()}.
 delete_table(Table)->
-    true = ets:delete(Table),
-    ok.
+    case ets:delete(Table) of
+        true ->
+            ok;
+        Error ->
+            {error, Error}
+    end.
 
-%% @doc Delete an entry in the ets table.
--spec delete(atom(), term()) -> true.
+%% @doc Delete an entry in the ets table.Ets always returns true for this function.
+-spec delete(atom(), term()) -> ok.
 delete(Table, Key) ->
-    true = ets:delete(Table, Key),
+    ets:delete(Table, Key),
     ok.
 
 %% @doc Backup a specific ets table.
 %% @see https://github.com/SiftLogic/erl-dns/issues/3
--spec backup_table(atom()) -> ok | {error, Reason:: term()}.
+-spec backup_table(atom()) -> ok | {error, Reason :: term()}.
 backup_table(_Table)->
-    ok.
+    {error, not_implemented}.
 
 %% @doc Should backup all ets tables.
 %% @see https://github.com/SiftLogic/erl-dns/issues/3
 -spec backup_tables() -> ok | {error, Reason :: term()}.
 backup_tables() ->
-    ok.
+    {error, not_implemented}.
 
 %% @doc Select from ets using key, value.
 -spec select(atom(), term()) -> tuple().
@@ -111,7 +144,8 @@ select(Table, MatchSpec, Limit) ->
 foldl(Fun, Acc, Table) ->
     ets:foldl(Fun, Acc, Table).
 
-%% @doc Empty ets table.
+%% @doc Empty ets table. Ets always returns true for this function.
 -spec empty_table(atom()) -> ok.
 empty_table(Table) ->
-    ets:delete_all_objects(Table).
+    ets:delete_all_objects(Table),
+    ok.
