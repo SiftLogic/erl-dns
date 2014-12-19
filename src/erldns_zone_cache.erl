@@ -347,7 +347,6 @@ add_new_zone(ZoneName, #zone{} = Zone) ->
                                                               records_by_name = [], records_by_type = []},
                                           get_ips_for_notify_set(ZoneName)}).
 
-
 %% @doc Put a name and its records into the cache, along with a SHA which can be
 %% used to determine if the zone requires updating.
 %%

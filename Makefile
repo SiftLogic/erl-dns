@@ -1,10 +1,15 @@
 .PHONY: all test clean
 
-all: clean-all build-all
+all: clean build-all
 
 build-all:
+	./rebar get-deps compile
+
+build-deps:
 	./rebar get-deps
-	./rebar compile
+
+clean-deps:
+	rm -rf deps/*
 
 build:
 	./rebar compile
@@ -16,12 +21,11 @@ clean:
 	./rebar clean
 
 clean-deps:
-	rm -Rf deps
+	rm -rf deps/*
 
 clean-all:
-	rm -Rf deps
+	rm -rf deps/*
 	./rebar clean
-
 
 dialyzer-init:
 	dialyzer --build-plt --apps erts kernel stdlib
@@ -55,3 +59,7 @@ test-clean-run:
 
 test-clean:
 	rm -rf logs/*
+	./rebar clean
+
+run:
+	erl -config erldns.config -pa ebin deps/**/ebin -s erldns
