@@ -14,4 +14,5 @@ ebin/erldns.app
 db_master/
 db_slave/
 db/
+test/test_db1/
 test/test_db2/
