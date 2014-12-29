@@ -54,7 +54,8 @@
          get_admin/0,
          get_mode/0,
          get_crypto/0,
-         is_test/0]).
+         is_test/0,
+         supports_geo/0]).
 
 -define(DEFAULT_IPV4_ADDRESS, {127,0,0,1}).
 -define(DEFAULT_IPV6_ADDRESS, {0,0,0,0,0,0,0,1}).
@@ -334,6 +335,17 @@ is_test() ->
         undefined ->
             false
     end.
+
+supports_geo() ->
+    case application:get_env(erldns, support_geo) of
+        {ok, true} ->
+            true;
+        {ok, false} ->
+            false;
+        undefined ->
+            false
+    end.
+
 
 keyget(Key, Data) ->
     {Key, Value} = lists:keyfind(Key, 1, Data),
