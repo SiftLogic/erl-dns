@@ -35,6 +35,12 @@
          code_change/3
         ]).
 
+-export([create_geogroup/2,
+         delete_geogroup/1,
+         add_region_to_geogroup/2,
+         update_geogroup/2,
+         list_geogroups/0]).
+
 %% Internal API
 
 -define(SERVER, ?MODULE).
@@ -44,7 +50,27 @@
 %% Public API
 start_link(_Name, ListenIP, Port) ->
     erldns_log:info("Starting ADMIN server on port ~p, IP ~p", [Port, ListenIP]),
+    erldns_storage:create(geolocation),
     gen_nb_server:start_link({local, ?MODULE}, ListenIP, Port, [Port, ListenIP]).
+
+%% Geo-location API
+create_geogroup(Country, Regions) ->
+    erldns_storage:insert(geolocation, #geolocation{country = Country, regions = Regions}).
+
+delete_geogroup(Country) ->
+    erldns_storage:delete(geolocation, Country).
+
+add_region_to_geogroup(Country, Region) ->
+    [{_Country, #geolocation{regions = Regions0}}] = erldns_storage:select(geolocation, Country),
+    erldns_storage:delete(geolocation, Country),
+    erldns_storage:insert(geolocation, [Region | Regions0]).
+
+update_geogroup(Country, Regions) ->
+    erldns_storage:delete(geolocation, Country),
+    erldns_storage:insert(geolocation, #geolocation{country = Country, regions = Regions}).
+
+list_geogroups() ->
+    ok.
 
 %% gen_server hooks
 init([Port, ListenIP]) ->

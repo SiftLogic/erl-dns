@@ -49,6 +49,11 @@
           nxdomain
          }).
 
+-record(geolocation, {
+    country :: binary(),
+    regions :: [{Region :: binary(), ListOfStates :: [binary()]}]
+}).
+
 -define(ADMIN_PORT, 9000).
 -define(DNS_LISTEN_PORT, 8053).
 -define(LOCAL_HOSTS, [{127, 0, 0, 1}, {0, 0, 0, 0, 0, 0, 0, 1}]).

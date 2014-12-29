@@ -191,5 +191,7 @@ mod(host_throttle) ->
     erldns_storage_json;
 mod(handler_registry) ->
     erldns_storage_json;
+mod(geolocation) ->
+    erldns_storage_mnesia;
 mod(_Table) ->
     erldns_config:storage_type().

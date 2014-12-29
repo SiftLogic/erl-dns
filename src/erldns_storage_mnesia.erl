@@ -89,6 +89,20 @@ create(authorities) ->
             ok;
         Error ->
             {error, Error}
+    end;
+create(geolocation) ->
+    ok = ensure_mnesia_started(),
+    case mnesia:create_table(geolocation,
+        [{attributes, record_info(fields, geolocation)},
+            {disc_copies, [node()]}]) of
+        {aborted, {already_exists, geolocation}} ->
+            erldns_log:warning("The geolocation table already exists on node ~p.~n",
+                [node()]),
+            ok;
+        {atomic, ok} ->
+            ok;
+        Error ->
+            {error, Error}
     end.
 
 %% @doc Insert into specified table. zone_cache calls this by {name, #zone{}}
@@ -111,6 +125,14 @@ insert(zones, {_N, #zone{} = Zone})->
     end;
 insert(authorities, #authorities{} = Auth) ->
     Write = fun() -> mnesia:write(authorities, Auth, write) end,
+    case mnesia:activity(transaction, Write) of
+        ok ->
+            ok;
+        Error ->
+            {error, Error}
+    end;
+insert(geolocation, #geolocation{} = Geolocation) ->
+    Write = fun() -> mnesia:write(geolocation, Geolocation, write) end,
     case mnesia:activity(transaction, Write) of
         ok ->
             ok;
