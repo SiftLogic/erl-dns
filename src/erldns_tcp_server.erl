@@ -16,10 +16,10 @@
 -module(erldns_tcp_server).
 -behavior(gen_nb_server).
 
-% API
+%% API
 -export([start_link/5]).
 
-% Gen server hooks
+%% Gen server hooks
 -export([init/1,
          handle_call/3,
          handle_cast/2,
@@ -30,41 +30,51 @@
          code_change/3
         ]).
 
-% Internal API
+%% Internal API
 -export([handle_request/3]).
 
 -define(SERVER, ?MODULE).
 
--record(state, {port, pool_name}).
+-record(state, {port, listen_ip, pool_name}).
 
 %% Public API
-start_link(_Name, Family, Addr, Port, PoolName) ->
-  lager:info("Starting TCP server for ~p on port ~p", [Family, Port]),
-  gen_nb_server:start_link(?MODULE, Addr, Port, [PoolName]).
+start_link(_Name, Family, ListenIP, Port, PoolName) ->
+    erldns_log:info("Starting TCP server for ~p on port ~p, IP ~p", [Family, Port, ListenIP]),
+    gen_nb_server:start_link(?MODULE, ListenIP, Port, [Port, ListenIP, PoolName]).
 
 %% gen_server hooks
-init([PoolName]) ->
-  {ok, #state{pool_name = PoolName}}.
+init([Port, ListenIP, PoolName]) ->
+    {ok, #state{port = Port, listen_ip = ListenIP, pool_name = PoolName}}.
+
+handle_call(get_addr, _From, State) ->
+    {reply, State#state.listen_ip, State};
 handle_call(_Request, _From, State) ->
-  {ok, State}.
+    {ok, State}.
+
 handle_cast(_Message, State) ->
-  {noreply, State}.
-handle_info({tcp, Socket, Bin}, #state{pool_name = PoolName} = State) ->
-  folsom_metrics:histogram_timed_update(tcp_handoff_histogram, ?MODULE, handle_request, [PoolName, Socket, Bin]),
-  {noreply, State};
+    {noreply, State}.
+
+handle_info({tcp, Socket, Bin}, #state{listen_ip = _ListenIP, pool_name = PoolName} = State) ->
+    folsom_metrics:histogram_timed_update(tcp_handoff_histogram, ?MODULE, handle_request,
+                                          [PoolName, Socket, Bin]),
+    {noreply, State};
 handle_info(_Message, State) ->
-  {noreply, State}.
+    {noreply, State}.
+
 terminate(_Reason, _State) ->
-  ok.
+    ok.
+
 sock_opts() ->
-  [binary].
+    [binary].
+
 new_connection(Socket, State) ->
-  inet:setopts(Socket, [{active, once}]),
-  {ok, State}.
+    inet:setopts(Socket, [{active, once}]),
+    {ok, State}.
+
 code_change(_PreviousVersion, State, _Extra) ->
-  {ok, State}.
+    {ok, State}.
 
 handle_request(PoolName, Socket, Bin) ->
-  poolboy:transaction(PoolName, fun(Worker) ->
-                                           gen_server:call(Worker, {tcp_query, Socket, Bin})
-                                       end).
+    poolboy:transaction(PoolName, fun(Worker) ->
+                                          gen_server:call(Worker, {tcp_query, Socket, Bin})
+                                  end).

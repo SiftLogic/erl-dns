@@ -32,3 +32,4 @@ start() ->
   application:start(hottub),
   application:start(egeoip),
   application:start(erldns).
+

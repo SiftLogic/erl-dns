@@ -19,29 +19,29 @@
 
 -define(FILENAME, "zones.json").
 
-% Public API
+%% Public API
 
 %% @doc Load zones from a file. The default file name is "zones.json".
 -spec load_zones() -> {ok, integer()} | {err,  atom()}.
 load_zones() ->
     case file:read_file(filename()) of
         {ok, Binary} ->
-            lager:info("Parsing zones JSON"),
+            erldns_log:info("Parsing zones JSON"),
             JsonZones = jsx:decode(Binary),
-            lager:info("Putting zones into cache"),
+            erldns_log:info("Putting zones into cache"),
             lists:foreach(
-                fun(JsonZone) ->
-                    Zone = erldns_zone_parser:zone_to_erlang(JsonZone),
-                    erldns_zone_cache:put_zone(Zone)
-                end, JsonZones),
-            lager:info("Loaded ~p zones", [length(JsonZones)]),
+              fun(JsonZone) ->
+                      Zone = erldns_zone_parser:zone_to_erlang(JsonZone),
+                      ok = erldns_zone_cache:put_zone(Zone)
+              end, JsonZones),
+            erldns_log:info("Loaded ~p zones", [length(JsonZones)]),
             {ok, length(JsonZones)};
         {error, Reason} ->
-            lager:error("Failed to load zones: ~p", [Reason]),
+            erldns_log:error("Failed to load zones: ~p", [Reason]),
             {err, Reason}
     end.
 
-% Internal API
+%% Internal API
 filename() ->
     case application:get_env(erldns, zones) of
         {ok, Filename} -> Filename;

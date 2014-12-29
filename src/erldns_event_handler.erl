@@ -35,11 +35,12 @@ handle_event(start_servers, State) ->
   case State#state.servers_running of
     false ->
       % Start up the UDP and TCP servers
-      lager:info("Starting the UDP and TCP supervisor"),
+      erldns_log:info("Starting the UDP and TCP supervisor"),
         {ok, _Pid} = erldns_server_sup:start_link(),
-        {Pools, Configs} = erldns_config:get_servers(),
+        {Pools, Configs} = erldns_config:get_server_configs(),
+        erldns_log:info("Pools: ~p, Configs; ~p", [Pools, Configs]),
         add_pools(Pools),
-        add_servers(Configs),
+        add_servers(lists:flatten([erldns_config:get_admin() | Configs])),
       erldns_events:notify(servers_started),
       {ok, State#state{servers_running = true}};
     _ ->
@@ -74,26 +75,35 @@ terminate(_Reason, _State) ->
 
 add_servers([]) ->
     ok;
-add_servers([{inet, {_, _, _, _} = IPAddr, tcp, Port, PoolName}| T]) ->
-    Spec = {tcp_inet, {erldns_tcp_server, start_link, [tcp_inet, inet, IPAddr, Port, PoolName]},
+add_servers([{inet, {_, _, _, _} = IPAddr, tcp, Port, PoolName}| Tail]) ->
+    Spec = {{tcp_inet, IPAddr}, {erldns_tcp_server, start_link, [tcp_inet, inet, IPAddr, Port, PoolName]},
         permanent, 5000, worker, [erldns_tcp_server]},
-    supervisor:start_child(erldns_server_sup, Spec),
-    add_servers(T);
-add_servers([{inet6, {_, _, _, _, _, _, _, _} = IPAddr, tcp, Port, PoolName}| T]) ->
-    Spec = {tcp_inet6, {erldns_tcp_server, start_link, [tcp_inet6, inet6, IPAddr, Port, PoolName]},
+    erldns_log:info("Starting server child with spec: ~p", [Spec]),
+    ok = start_child(Spec),
+    add_servers(Tail);
+add_servers([{inet6, {_, _, _, _, _, _, _, _} = IPAddr, tcp, Port, PoolName}| Tail]) ->
+    Spec = {{tcp_inet6, IPAddr}, {erldns_tcp_server, start_link, [tcp_inet6, inet6, IPAddr, Port, PoolName]},
         permanent, 5000, worker, [erldns_tcp_server]},
-    supervisor:start_child(erldns_server_sup, Spec),
-    add_servers(T);
-add_servers([{inet, {_, _, _, _} = IPAddr, udp, Port, _}| T]) ->
-    Spec = {udp_inet, {erldns_udp_server, start_link, [udp_inet, inet, IPAddr, Port]},
+    erldns_log:info("Starting server child with spec: ~p", [Spec]),
+    ok = start_child(Spec),
+    add_servers(Tail);
+add_servers([{inet, {_, _, _, _} = IPAddr, udp, Port, _}| Tail]) ->
+    Spec = {{udp_inet, IPAddr}, {erldns_udp_server, start_link, [udp_inet, inet, IPAddr, Port]},
         permanent, 5000, worker, [erldns_udp_server]},
-    supervisor:start_child(erldns_server_sup, Spec),
-    add_servers(T);
-add_servers([{inet6, {_, _, _, _, _, _, _, _} = IPAddr, udp, Port, _}| T]) ->
-    Spec = {udp_inet6, {erldns_udp_server, start_link, [udp_inet6, inet6, IPAddr, Port]},
+    erldns_log:info("Starting server child with spec: ~p", [Spec]),
+    ok = start_child(Spec),
+    add_servers(Tail);
+add_servers([{inet6, {_, _, _, _, _, _, _, _} = IPAddr, udp, Port, _}| Tail]) ->
+    Spec = {{udp_inet6, IPAddr}, {erldns_udp_server, start_link, [udp_inet6, inet6, IPAddr, Port]},
     permanent, 5000, worker, [erldns_udp_server]},
-    supervisor:start_child(erldns_server_sup, Spec),
-    add_servers(T).
+    erldns_log:info("Starting server child with spec: ~p", [Spec]),
+    ok = start_child(Spec),
+    add_servers(Tail);
+add_servers([{Addr, Port} | Tail]) ->
+    Spec =  {erldns_admin_server, {erldns_admin_server, start_link, [erldns_admin_server, Addr, Port]},
+        permanent, 5000, worker, [erldns_admin_server]},
+    ok = start_child(Spec),
+    add_servers(Tail).
 
 add_pools([]) ->
     ok;
@@ -104,10 +114,22 @@ add_pools([Pool | Tail]) ->
             {size, keyget(size, Pool)},
             {max_overflow, keyget(max_overflow, Pool)}],
     Spec = poolboy:child_spec(Name, Args),
-    R = supervisor:start_child(erldns_server_sup, Spec),
-    lager:info("Start Pool: ~p", [R]),
+    ok = start_child(Spec),
     add_pools(Tail).
 
 keyget(Key, Data) ->
     {Key, Value} = lists:keyfind(Key, 1, Data),
     Value.
+
+%% @doc We only want to crash if its already started. If its present, that's fine.
+-spec start_child(term()) -> ok | {error, any()}.
+start_child(Spec) ->
+    case supervisor:start_child(erldns_server_sup, Spec) of
+        {ok, _Pid} ->
+            ok;
+        {error, {already_started, Pid}} ->
+            {error, {already_started, Pid}};
+        {error, already_present} ->
+            ok
+    end.
+

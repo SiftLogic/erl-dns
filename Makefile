@@ -1,10 +1,15 @@
 .PHONY: all test clean
 
-all: clean-all build-all
+all: clean build-all
 
 build-all:
+	./rebar get-deps compile
+
+build-deps:
 	./rebar get-deps
-	./rebar compile
+
+clean-deps:
+	rm -rf deps/*
 
 build:
 	./rebar compile
@@ -16,12 +21,11 @@ clean:
 	./rebar clean
 
 clean-deps:
-	rm -Rf deps
+	rm -rf deps/*
 
 clean-all:
-	rm -Rf deps
+	rm -rf deps/*
 	./rebar clean
-
 
 dialyzer-init:
 	dialyzer --build-plt --apps erts kernel stdlib
@@ -34,6 +38,20 @@ test:
 	./rebar compile
 	ct_run -config erldns.config -dir test -suite erldns_SUITE -logdir test_logs -pa ebin deps/**/ebin/ -s erldns
 
+test-master:
+	echo "You need to have a slave running before running this test! < ./test_slave.sh >"
+	echo "Make sure you have configured correct IP for (master.config, slave.config)"
+	rm -f test/*beam
+	./rebar compile
+	ct_run -config master.config -dir test -suite master_SUITE -logdir test_logs -pa ebin deps/**/ebin/ -s erldns
+
+test-slave:
+	echo "You need to have a master running before running this test! < ./test_master.sh >"
+	echo "Make sure you have configured correct IP for (master.config, slave.config)"
+	rm -f test/*beam
+	./rebar compile
+	ct_run -config slave.config -dir test -suite slave_SUITE -logdir test_logs -pa ebin deps/**/ebin/ -s erldns
+
 test-clean-run:
 	rm -f test/*beam
 	./rebar clean compile
@@ -41,3 +59,7 @@ test-clean-run:
 
 test-clean:
 	rm -rf logs/*
+	./rebar clean
+
+run:
+	erl -config erldns.config -pa ebin deps/**/ebin -s erldns
