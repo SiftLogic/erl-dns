@@ -140,7 +140,13 @@ json_to_erlang([Head | Tail], Parsers, #partial_zone{} = Zone) ->
                                     pass ->
                                         case json_record_to_erlang(Data) of
                                             {} -> try_custom_parsers(Data, Parsers);
-                                            ParsedRecord -> ParsedRecord
+                                            #dns_rr{data = #dns_rrdata_a{ip = IP}} = ARecord ->
+                                                {ok, Geo} = egeoip:lookup(IP),
+                                                {ARecord, Geo};
+                                            #dns_rr{data = #dns_rrdata_aaaa{ip = IP}} = AAAARecord ->
+                                                {ok, Geo} = egeoip:lookup(IP),
+                                                {AAAARecord, Geo};
+                                            ParsedRecord -> {ParsedRecord, undefined}
                                         end;
                                     _ ->
                                         {}
@@ -374,31 +380,31 @@ json_record_to_erlang([Name, <<"SRV">>, Ttl, Data, _Context]) ->
        ttl = Ttl};
 
 json_record_to_erlang([Name, <<"NAPTR">>, Ttl, Data, _Context]) ->
-  #dns_rr{
-     name = Name,
-     type = ?DNS_TYPE_NAPTR,
-     data = #dns_rrdata_naptr{
-               order = proplists:get_value(<<"order">>, Data),
-               preference = proplists:get_value(<<"preference">>, Data),
-               flags = proplists:get_value(<<"flags">>, Data),
-               services = proplists:get_value(<<"services">>, Data),
-               regexp = proplists:get_value(<<"regexp">>, Data),
-               replacement = proplists:get_value(<<"replacement">>, Data)
-              },
-     ttl = Ttl};
+    #dns_rr{
+       name = Name,
+       type = ?DNS_TYPE_NAPTR,
+       data = #dns_rrdata_naptr{
+                 order = proplists:get_value(<<"order">>, Data),
+                 preference = proplists:get_value(<<"preference">>, Data),
+                 flags = proplists:get_value(<<"flags">>, Data),
+                 services = proplists:get_value(<<"services">>, Data),
+                 regexp = proplists:get_value(<<"regexp">>, Data),
+                 replacement = proplists:get_value(<<"replacement">>, Data)
+                },
+       ttl = Ttl};
 json_record_to_erlang([Name, <<"LOC">>, Ttl, Data, _Context]) ->
     #dns_rr{
-        name = Name,
-        type = ?DNS_TYPE_LOC,
-        data = #dns_rrdata_loc{
-            size = proplists:get_value(<<"size">>, Data),
-            horiz = proplists:get_value(<<"horizontal">>, Data),
-            vert = proplists:get_value(<<"vertical">>, Data),
-            lon = proplists:get_value(<<"longitude">>, Data),
-            lat = proplists:get_value(<<"latitude">>, Data),
-            alt = proplists:get_value(<<"altitude">>, Data)
-        },
-        ttl = Ttl};
+       name = Name,
+       type = ?DNS_TYPE_LOC,
+       data = #dns_rrdata_loc{
+                 size = proplists:get_value(<<"size">>, Data),
+                 horiz = proplists:get_value(<<"horizontal">>, Data),
+                 vert = proplists:get_value(<<"vertical">>, Data),
+                 lon = proplists:get_value(<<"longitude">>, Data),
+                 lat = proplists:get_value(<<"latitude">>, Data),
+                 alt = proplists:get_value(<<"altitude">>, Data)
+                },
+       ttl = Ttl};
 
 json_record_to_erlang(_Data) ->
     {}.

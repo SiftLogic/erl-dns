@@ -155,11 +155,20 @@ get_zones_for_slave(Addr) ->
 get_zone_with_records(Name) ->
     NormalizedName = normalize_name(Name),
     case erldns_storage:select(zones, NormalizedName) of
-        [{NormalizedName, Zone}] -> {ok, Zone};
+        [{NormalizedName, #zone{records = Records} = Zone}] -> {ok, Zone#zone{records = remove_geolocation(Records)}};
         _Error ->
             erldns_log:error("Error getting zone ~p: ~p", [NormalizedName, _Error]),
             {error, {zone_not_found, NormalizedName}}
     end.
+
+%% TEMP FUNCTION
+remove_geolocation(Records) ->
+    remove_geolocation(Records, []).
+
+remove_geolocation([], Acc) ->
+    Acc;
+remove_geolocation([{Record, _Geo} | Tail], Acc) ->
+    remove_geolocation(Tail, [Record | Acc]).
 
 %% @doc Retrieve the allow_notify option from zone.
 -spec get_zone_allow_notify(binary()) -> [inet:ip_address()] | {error, {zone_not_found, binary()}}.
@@ -578,6 +587,7 @@ find_zone_in_cache(Qname) ->
 
 build_zone(#zone{records = Records} = Zone) ->
     Zone#zone{authority = lists:filter(erldns_records:match_type(?DNS_TYPE_SOA), Records),
+              records = append_geolocation(Records),
               records_by_name = build_named_index(Records)}.
 
 build_zone(Qname, AllowNotifyList, AllowTransferList, AllowUpdateList, AlsoNotifyList,
@@ -586,7 +596,7 @@ build_zone(Qname, AllowNotifyList, AllowTransferList, AllowUpdateList, AlsoNotif
     #zone{name = Qname, allow_notify = AllowNotifyList, allow_transfer = AllowTransferList,
           allow_update = AllowUpdateList, also_notify = AlsoNotifyList,
           notify_source = NotifySourceIP, version = Version, record_count = length(Records),
-          authority = Authority, records = Records,
+          authority = Authority, records = append_geolocation(Records),
           records_by_name = build_named_index(Records)}.
 
 build_zone(Qname, AllowNotifyList, AllowTransferList, AllowUpdateList, AlsoNotifyList,
@@ -594,12 +604,25 @@ build_zone(Qname, AllowNotifyList, AllowTransferList, AllowUpdateList, AlsoNotif
     #zone{name = Qname, allow_notify = AllowNotifyList, allow_transfer = AllowTransferList,
           allow_update = AllowUpdateList, also_notify = AlsoNotifyList, notify_source = NotifySourceIP,
           version = Version, record_count = length(Records),
-          authority = [Authority#dns_rr{name = normalize_name(AuthName)}], records = Records,
+          authority = [Authority#dns_rr{name = normalize_name(AuthName)}], records = append_geolocation(Records),
           records_by_name = build_named_index(Records)}.
+
+append_geolocation(Records) ->
+    append_geolocation(Records, []).
+
+append_geolocation([], Acc) ->
+    erldns_log:info("Returning records: ~p", [Acc]),
+    Acc;
+append_geolocation([#dns_rr{data = #dns_rrdata_a{ip = IP}} = Record | Tail], Acc) ->
+    append_geolocation(Tail, [{Record, egeoip:lookup(IP)} | Acc]);
+append_geolocation([#dns_rr{data = #dns_rrdata_aaaa{ip = IP}} = Record | Tail], Acc) ->
+    append_geolocation(Tail, [{Record, egeoip:lookup(IP)} | Acc]);
+append_geolocation([Record | Tail], Acc) ->
+    append_geolocation(Tail, [{Record, undefined} | Acc]).
 
 build_named_index(Records) -> build_named_index(Records, dict:new()).
 build_named_index([], Idx) -> Idx;
-build_named_index([#dns_rr{name = Name, ttl = TTL} = R |Rest], Idx) ->
+build_named_index([{#dns_rr{name = Name, ttl = TTL} = R, _Geo} |Rest], Idx) ->
     Expiry = timestamp() + TTL,
     case dict:find(Name, Idx) of
         {ok, Records} ->
@@ -620,8 +643,8 @@ normalize_records(Records) ->
 
 normalize_records([], Acc) ->
     Acc;
-normalize_records([#dns_rr{name = Name} = H | Tail], Acc) ->
-    normalize_records(Tail, [H#dns_rr{name = normalize_name(Name)} | Acc]).
+normalize_records([{#dns_rr{name = Name} = H, GeoLocation} | Tail], Acc) ->
+    normalize_records(Tail, [{H#dns_rr{name = normalize_name(Name)}, GeoLocation} | Acc]).
 
 %% @doc Takes a binary messages, and transforms it to lower case. Self said!
 -spec bin_to_lower(Bin :: binary()) -> binary().

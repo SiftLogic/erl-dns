@@ -87,6 +87,22 @@
                 }
             },
             {
+                "name": "ns2.example.com",
+                "type": "A",
+                "ttl": 3600,
+                "data": {
+                    "ip": "8.8.8.8"
+                }
+            },
+            {
+                "name": "ns2.example.com",
+                "type": "A",
+                "ttl": 3600,
+                "data": {
+                    "ip": "192.1.4.32"
+                }
+            },
+            {
                 "name": "example.com",
                 "type": "NS",
                 "ttl": 3600,
