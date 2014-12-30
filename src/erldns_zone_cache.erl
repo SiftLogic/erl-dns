@@ -611,7 +611,6 @@ append_geolocation(Records) ->
     append_geolocation(Records, []).
 
 append_geolocation([], Acc) ->
-    erldns_log:info("Returning records: ~p", [Acc]),
     Acc;
 append_geolocation([#dns_rr{data = #dns_rrdata_a{ip = IP}} = Record | Tail], Acc) ->
     append_geolocation(Tail, [{Record, egeoip:lookup(IP)} | Acc]);
