@@ -35,9 +35,8 @@
          code_change/3
         ]).
 
--export([create_geogroup/2,
+-export([create_geogroup/3,
          delete_geogroup/1,
-         add_region_to_geogroup/2,
          update_geogroup/2,
          list_geogroups/0]).
 
@@ -54,20 +53,19 @@ start_link(_Name, ListenIP, Port) ->
     gen_nb_server:start_link({local, ?MODULE}, ListenIP, Port, [Port, ListenIP]).
 
 %% Geo-location API
-create_geogroup(Country, Regions) ->
-    erldns_storage:insert(geolocation, #geolocation{country = Country, regions = Regions}).
+create_geogroup(Name, Country, Regions) ->
+    erldns_storage:insert(geolocation, #geolocation{name = Name,
+                                                    continent = proplists:get_value(Country, ?COUNTRY_CODES),
+                                                    country = Country, regions = Regions}).
 
-delete_geogroup(Country) ->
-    erldns_storage:delete(geolocation, Country).
+delete_geogroup(Name) ->
+    erldns_storage:delete(geolocation, Name).
 
-add_region_to_geogroup(Country, Region) ->
-    [{_Country, #geolocation{regions = Regions0}}] = erldns_storage:select(geolocation, Country),
-    erldns_storage:delete(geolocation, Country),
-    erldns_storage:insert(geolocation, [Region | Regions0]).
-
-update_geogroup(Country, Regions) ->
-    erldns_storage:delete(geolocation, Country),
-    erldns_storage:insert(geolocation, #geolocation{country = Country, regions = Regions}).
+update_geogroup(Name, Region) ->
+    [{_Name, #geolocation{regions = Regions0} = Geo}] = erldns_storage:select(geolocation, Name),
+    erldns_storage:delete(geolocation, Name),
+    erldns_storage:insert(geolocation,
+                          Geo#geolocation{regions = [Region | Regions0]}).
 
 list_geogroups() ->
     ok.
