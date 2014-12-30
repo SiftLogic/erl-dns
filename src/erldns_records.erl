@@ -68,17 +68,17 @@ minimum_soa_ttl(Record, _) -> Record.
 
 %% Various matching functions.
 match_type(Type) ->
-    fun({R, _Geo}) when is_record(R, dns_rr) ->
+    fun(R) when is_record(R, dns_rr) ->
             R#dns_rr.type =:= Type
     end.
 
 match_types(Types) ->
-    fun({R, _Geo}) when is_record(R, dns_rr) ->
+    fun(R) when is_record(R, dns_rr) ->
             lists:any(fun(T) -> R#dns_rr.type =:= T end, Types)
     end.
 
 match_wildcard() ->
-    fun({R, _Geo}) when is_record(R, dns_rr) ->
+    fun(R) when is_record(R, dns_rr) ->
             lists:any(
               fun(L) ->
                       L =:= <<"*">>
@@ -86,7 +86,7 @@ match_wildcard() ->
     end.
 
 match_glue(Name) ->
-    fun({R, _Geo}) when is_record(R, dns_rr) ->
+    fun(R) when is_record(R, dns_rr) ->
             R#dns_rr.data =:= #dns_rrdata_ns{dname=Name}
     end.
 

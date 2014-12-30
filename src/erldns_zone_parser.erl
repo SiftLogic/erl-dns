@@ -140,13 +140,7 @@ json_to_erlang([Head | Tail], Parsers, #partial_zone{} = Zone) ->
                                     pass ->
                                         case json_record_to_erlang(Data) of
                                             {} -> try_custom_parsers(Data, Parsers);
-                                            #dns_rr{data = #dns_rrdata_a{ip = IP}} = ARecord ->
-                                                {ok, Geo} = egeoip:lookup(IP),
-                                                {ARecord, Geo};
-                                            #dns_rr{data = #dns_rrdata_aaaa{ip = IP}} = AAAARecord ->
-                                                {ok, Geo} = egeoip:lookup(IP),
-                                                {AAAARecord, Geo};
-                                            ParsedRecord -> {ParsedRecord, undefined}
+                                            ParsedRecord -> ParsedRecord
                                         end;
                                     _ ->
                                         {}

@@ -250,7 +250,7 @@ get_delegations(Name) ->
         {ok, Zone} ->
             lists:filter(fun(R)
                             -> apply(erldns_records:match_type(?DNS_TYPE_NS), [R]) and
-                                   apply(erldns_records:match_glue(Name), [R]) end, Zone#zone.records);
+                                   apply(erldns_records:match_glue(Name), [R]) end, remove_geolocation(Zone#zone.records));
         _ ->
             []
     end.
@@ -622,7 +622,7 @@ append_geolocation([Record | Tail], Acc) ->
 
 build_named_index(Records) -> build_named_index(Records, dict:new()).
 build_named_index([], Idx) -> Idx;
-build_named_index([{#dns_rr{name = Name, ttl = TTL} = R, _Geo} |Rest], Idx) ->
+build_named_index([#dns_rr{name = Name, ttl = TTL} = R|Rest], Idx) ->
     Expiry = timestamp() + TTL,
     case dict:find(Name, Idx) of
         {ok, Records} ->
@@ -643,8 +643,8 @@ normalize_records(Records) ->
 
 normalize_records([], Acc) ->
     Acc;
-normalize_records([{#dns_rr{name = Name} = H, GeoLocation} | Tail], Acc) ->
-    normalize_records(Tail, [{H#dns_rr{name = normalize_name(Name)}, GeoLocation} | Acc]).
+normalize_records([#dns_rr{name = Name} = H | Tail], Acc) ->
+    normalize_records(Tail, [H#dns_rr{name = normalize_name(Name)} | Acc]).
 
 %% @doc Takes a binary messages, and transforms it to lower case. Self said!
 -spec bin_to_lower(Bin :: binary()) -> binary().
