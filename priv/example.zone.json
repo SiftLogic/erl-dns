@@ -79,6 +79,22 @@
                 }
             },
             {
+                "name": "_geo.US-EAST.ns2.example.com",
+                "type": "TXT",
+                "ttl": 3600,
+                "data": {
+                    "txt": "\"Test record for region\""
+                }
+            },
+            {
+                "name": "_geo.US-WEST.ns2.example.com",
+                "type": "TXT",
+                "ttl": 3600,
+                "data": {
+                    "txt": "\"Test record for region\""
+                }
+            },
+            {
                 "name": "ns2.example.com",
                 "type": "A",
                 "ttl": 3600,
@@ -119,22 +135,6 @@
                 }
             },
             {
-                "name": "_geo.US-EAST_ns2.example.com",
-                "type": "TXT",
-                "ttl": 3600,
-                "data": {
-                    "txt": "\"Test record for region\""
-                }
-            },
-            {
-                "name": "_geo.US-WEST_ns2.example.com",
-                "type": "TXT",
-                "ttl": 3600,
-                "data": {
-                    "txt": "\"Test record for region\""
-                }
-            },
-            {
                 "name": "_ldap._tcp.example.com",
                 "type": "SRV",
                 "ttl": 3600,
@@ -151,18 +151,6 @@
                 "ttl": 3600,
                 "data": {
                     "ip": "50.40.50.40"
-                }
-            },
-            {
-                "name": "example.com",
-                "type": "LOC",
-                "ttl": 3600,
-                "data": {
-                    "size": 0,
-                    "horizontal": 0,
-                    "vertical": 0,
-                    "latitude": 90,
-                    "longitude": 90
                 }
             }
         ]
