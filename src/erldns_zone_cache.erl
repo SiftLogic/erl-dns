@@ -138,16 +138,16 @@ get_zone(Name) ->
 %% @end
 -spec get_zones_for_slave(inet:ip_address()) -> [binary()].
 get_zones_for_slave(Addr) ->
-    Res = lists:foldl(fun(ZoneName, Acc) ->
-                              {ok, #zone{records = Records} = Zone} = get_zone_with_records(ZoneName),
-                              case lists:member(Addr, get_ips_for_notify_set(Records)) of
-                                  true ->
-                                      [Zone#zone{records = [], authority = [], records_by_name = [], records_by_type = []} | Acc];
-                                  false ->
-                                      Acc
-                              end
-                      end, [], zone_names()),
-    Res.
+    lists:foldl(fun(ZoneName, Acc) ->
+                        {ok, #zone{records = Records} = Zone} = get_zone_with_records(ZoneName),
+                        case lists:member(Addr, get_ips_for_notify_set(Records)) of
+                            true ->
+                                [Zone#zone{records = [], authority = [], records_by_name = [], records_by_type = []} | Acc];
+                            false ->
+                                erldns_log:info("IP ~p is not part of notifyset in ~p", [Addr, get_ips_for_notify_set(Records)]),
+                                Acc
+                        end
+                end, [], zone_names()).
 
 
 %% @doc Get a zone for the specific name, including the records for the zone.
@@ -266,23 +266,26 @@ get_records_by_name(Name) ->
 -spec retrieve_records(inet:ip_address(), dns:dname()) -> [] | [dns:rr()].
 retrieve_records(ServerIP, Qname) ->
     Name = normalize_name(Qname),
-    case ServerIP =:= get_zone_notify_source(Name) of
-        true ->
-            %% We are master, just return the records you have
-            get_records_by_name(Name);
-        false ->
-            %% We are slave, get the zone in the cache and the records from the dict with expirys.
-            case find_zone_in_cache(Name) of
-                {ok, Zone} ->
-                    case dict:find(Name, Zone#zone.records_by_name) of
-                        {ok, RecordSet} ->
-                            retrieve_records(Name, Zone#zone.notify_source, ServerIP, RecordSet, [], []);
-                        _ -> []
-                    end;
-                _ ->
-                    []
-            end
-    end.
+    Records = case ServerIP =:= get_zone_notify_source(Name) of
+                  true ->
+                      %% We are master, just return the records you have
+                      get_records_by_name(Name);
+                  false ->
+                      %% We are slave, get the zone in the cache and the records from the dict with expirys.
+                      %% TODO Match A/AAAA records with geolocation data.
+                      case find_zone_in_cache(Name) of
+                          {ok, Zone} ->
+                              case dict:find(Name, Zone#zone.records_by_name) of
+                                  {ok, RecordSet} ->
+                                      retrieve_records(Name, Zone#zone.notify_source, ServerIP, RecordSet, [], []);
+                                  _ -> []
+                              end;
+                          _ ->
+                              []
+                      end
+              end,
+    match_georecords(Records),
+    Records.
 
 retrieve_records(ZoneName, MasterIP, ServerIP, [], Acc, QueryAcc) ->
     %%Query server for records that needed to be updated, and merge them with records that didn't.
@@ -308,6 +311,10 @@ query_master_for_records(_MasterIP, _ServerIP, []) ->
 query_master_for_records(MasterIP, ServerIP, QueryList) ->
     erldns_zone_transfer_worker:query_for_records(MasterIP, ServerIP, QueryList).
 
+%% @doc This functin recieves a list of dns_rr records and does all the magic as far as geolocation.
+%% It will remove geolocation records, and match geolocation data with the record. It will remove duplicates
+match_georecords(_Records) ->
+    ok.
 
 %% @doc Check if the name is in a zone.
 -spec in_zone(binary()) -> boolean().
