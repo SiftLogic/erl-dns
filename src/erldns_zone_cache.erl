@@ -682,15 +682,7 @@ get_notify_set([#dns_rr{data = Data} | Tail], SOA, NameServers) ->
 %% @end
 -spec exclude_mname_duplicates(dns:rr(), [dns:rr()]) -> [dns:rr()].
 exclude_mname_duplicates(#dns_rrdata_soa{mname = MName}, NameServers) ->
-    lists:foldl(fun(#dns_rrdata_ns{dname = DName} = NameServer, Acc0) ->
-                        case DName =:= MName of
-                            true ->
-                                %% Found a NS record that is also a mname of an SOA, exclude it
-                                Acc0;
-                            false ->
-                                [NameServer | Acc0]
-                        end
-                end, [], NameServers).
+    [NameServer || #dns_rrdata_ns{dname = DName} = NameServer <- NameServers, DName =/= MName].
 
 %% @doc This function takes a list of records, finds it's A/AAAA record in the given record set
 %% and returns the nameserver's IP address.
@@ -708,16 +700,16 @@ get_ips_for_notify_set(NameServers) ->
 
 get_ips_for_notify_set(_NameServers, [], IPs) ->
     IPs;
-get_ips_for_notify_set(NameServers, [#dns_rrdata_ns{dname = DName} | Tail], IPs) ->
-    case lists:keyfind(DName, 2, NameServers) of
+get_ips_for_notify_set(NameServers, [#dns_rrdata_ns{dname = DName} | Tail] = NSRecords, IPs) ->
+    case lists:keyfind(DName, #dns_rr.name, NameServers) of
         false ->
             get_ips_for_notify_set(NameServers, Tail, IPs);
-        #dns_rr{data = ARecord}  ->
+        #dns_rr{data = ARecord} = DNSRR  ->
             case ARecord of
                 #dns_rrdata_a{ip = IP} ->
-                    get_ips_for_notify_set(NameServers, Tail, [IP | IPs]);
+                    get_ips_for_notify_set(lists:delete(DNSRR, NameServers), NSRecords, [IP | IPs]);
                 #dns_rrdata_aaaa{ip = IP} ->
-                    get_ips_for_notify_set(NameServers, Tail, [IP | IPs])
+                    get_ips_for_notify_set(lists:delete(DNSRR, NameServers), NSRecords, [IP | IPs])
             end
     end.
 
