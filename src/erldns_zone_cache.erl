@@ -155,20 +155,11 @@ get_zones_for_slave(Addr) ->
 get_zone_with_records(Name) ->
     NormalizedName = normalize_name(Name),
     case erldns_storage:select(zones, NormalizedName) of
-        [{NormalizedName, #zone{records = Records} = Zone}] -> {ok, Zone#zone{records = remove_geolocation(Records)}};
+        [{NormalizedName, Zone}] -> {ok, Zone};
         _Error ->
             erldns_log:error("Error getting zone ~p: ~p", [NormalizedName, _Error]),
             {error, {zone_not_found, NormalizedName}}
     end.
-
-%% TEMP FUNCTION
-remove_geolocation(Records) ->
-    remove_geolocation(Records, []).
-
-remove_geolocation([], Acc) ->
-    Acc;
-remove_geolocation([{Record, _Geo} | Tail], Acc) ->
-    remove_geolocation(Tail, [Record | Acc]).
 
 %% @doc Retrieve the allow_notify option from zone.
 -spec get_zone_allow_notify(binary()) -> [inet:ip_address()] | {error, {zone_not_found, binary()}}.
@@ -250,7 +241,7 @@ get_delegations(Name) ->
         {ok, Zone} ->
             lists:filter(fun(R)
                             -> apply(erldns_records:match_type(?DNS_TYPE_NS), [R]) and
-                                   apply(erldns_records:match_glue(Name), [R]) end, remove_geolocation(Zone#zone.records));
+                                   apply(erldns_records:match_glue(Name), [R]) end, Zone#zone.records);
         _ ->
             []
     end.
@@ -260,10 +251,8 @@ get_delegations(Name) ->
 get_records_by_name(Name) ->
     case find_zone_in_cache(Name) of
         {ok, Zone} ->
-            %%erldns_log:info("~p-> found zone: ~p~n~n", [?MODULE, Zone]),
             case dict:find(normalize_name(Name), Zone#zone.records_by_name) of
                 {ok, RecordSet} ->
-                    %%erldns_log:info("~p-> Record Set: ~p", [?MODULE, RecordSet]),
                     remove_expiry(RecordSet);
                 _ -> []
             end;
@@ -587,7 +576,7 @@ find_zone_in_cache(Qname) ->
 
 build_zone(#zone{records = Records} = Zone) ->
     Zone#zone{authority = lists:filter(erldns_records:match_type(?DNS_TYPE_SOA), Records),
-              records = append_geolocation(Records),
+              records = Records,
               records_by_name = build_named_index(Records)}.
 
 build_zone(Qname, AllowNotifyList, AllowTransferList, AllowUpdateList, AlsoNotifyList,
@@ -596,7 +585,7 @@ build_zone(Qname, AllowNotifyList, AllowTransferList, AllowUpdateList, AlsoNotif
     #zone{name = Qname, allow_notify = AllowNotifyList, allow_transfer = AllowTransferList,
           allow_update = AllowUpdateList, also_notify = AlsoNotifyList,
           notify_source = NotifySourceIP, version = Version, record_count = length(Records),
-          authority = Authority, records = append_geolocation(Records),
+          authority = Authority, records = Records,
           records_by_name = build_named_index(Records)}.
 
 build_zone(Qname, AllowNotifyList, AllowTransferList, AllowUpdateList, AlsoNotifyList,
@@ -604,20 +593,8 @@ build_zone(Qname, AllowNotifyList, AllowTransferList, AllowUpdateList, AlsoNotif
     #zone{name = Qname, allow_notify = AllowNotifyList, allow_transfer = AllowTransferList,
           allow_update = AllowUpdateList, also_notify = AlsoNotifyList, notify_source = NotifySourceIP,
           version = Version, record_count = length(Records),
-          authority = [Authority#dns_rr{name = normalize_name(AuthName)}], records = append_geolocation(Records),
+          authority = [Authority#dns_rr{name = normalize_name(AuthName)}], records = Records,
           records_by_name = build_named_index(Records)}.
-
-append_geolocation(Records) ->
-    append_geolocation(Records, []).
-
-append_geolocation([], Acc) ->
-    Acc;
-append_geolocation([#dns_rr{data = #dns_rrdata_a{ip = IP}} = Record | Tail], Acc) ->
-    append_geolocation(Tail, [{Record, egeoip:lookup(IP)} | Acc]);
-append_geolocation([#dns_rr{data = #dns_rrdata_aaaa{ip = IP}} = Record | Tail], Acc) ->
-    append_geolocation(Tail, [{Record, egeoip:lookup(IP)} | Acc]);
-append_geolocation([Record | Tail], Acc) ->
-    append_geolocation(Tail, [{Record, undefined} | Acc]).
 
 build_named_index(Records) -> build_named_index(Records, dict:new()).
 build_named_index([], Idx) -> Idx;

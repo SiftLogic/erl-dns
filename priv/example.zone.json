@@ -119,6 +119,22 @@
                 }
             },
             {
+                "name": "US-EAST_ns2.example.com",
+                "type": "TXT",
+                "ttl": 3600,
+                "data": {
+                    "txt": "\"Test record for region\""
+                }
+            },
+            {
+                "name": "US-WEST_ns2.example.com",
+                "type": "TXT",
+                "ttl": 3600,
+                "data": {
+                    "txt": "\"Test record for region\""
+                }
+            },
+            {
                 "name": "_ldap._tcp.example.com",
                 "type": "SRV",
                 "ttl": 3600,
