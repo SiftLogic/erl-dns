@@ -44,7 +44,7 @@
 
 -define(SERVER, ?MODULE).
 
--record(state, {port, listen_ip}).
+-record(state, {port, listen_ip, lookup_table}).
 
 %% Public API
 start_link(_Name, ListenIP, Port) ->
@@ -62,12 +62,14 @@ create_geogroup(Name, Country, Regions) ->
     %% TODO Ensure no duplicates are being added. This includes duplicate regions
     erldns_storage:insert(geolocation, #geolocation{name = normalize_name(Name),
                                                     continent = proplists:get_value(Country, ?COUNTRY_CODES),
-                                                    country = Country, regions = Regions}).
+                                                    country = Country, regions = Regions}),
+    generate_lookup_table().
 
 %% @doc Deletes a geogroup from the DB.
 -spec delete_geogroup(binary()) -> ok | {error, term()}.
 delete_geogroup(Name) ->
-    erldns_storage:delete(geolocation, normalize_name(Name)).
+    erldns_storage:delete(geolocation, normalize_name(Name)),
+    generate_lookup_table().
 
 %% @doc Takes the name of the geogroup to be modified, and a new list of region(s) to add to it.
 -spec update_geogroup(binary(), binary() | list(binary())) -> ok | {error, term()}.
@@ -77,10 +79,14 @@ update_geogroup(Name, Region) ->
     [{_Name, Geo}] = erldns_storage:select(geolocation, NormalizedName),
     erldns_storage:delete(geolocation, NormalizedName),
     erldns_storage:insert(geolocation,
-                          Geo#geolocation{regions = Region}).
+                          Geo#geolocation{regions = Region}),
+    generate_lookup_table().
 
 list_geogroups() ->
     ok.
+
+generate_lookup_table() ->
+    gen_server:cast(erldns_admin_server, generate_lookup_table).
 
 %% gen_server hooks
 init([Port, ListenIP]) ->
@@ -89,6 +95,18 @@ init([Port, ListenIP]) ->
 handle_call(_Request, _From, State) ->
     {ok, State}.
 
+handle_cast(generate_lookup_table, State) ->
+    %% TODO Generate the lookup table in ets.
+    %% 1. A *user* (read me) wants to have geo-located records for a domain
+    %% 2. I use the API to create a georegion (the #daregion{} instance) named 'us-east', which include Florida, New York, and Georgia (cause we don't like the other states)
+    %% 3. The 'system' saves my definition in the database so I can re-use it whenever I want
+    %% 4. The system then creates the entries in the lookup table (ets) for the full set of combinations
+    %% eg
+    %% {{1, <<"US">>,<<"FL">>}, <<"us-east">>},
+    %% {{1, <<"US">>,<<"NY">>}, <<"us-east">>},
+    %% {{1, <<"US">>,<<GA">>}, <<"us-east">>}
+    LookUpTable = ok,
+    {noreply, State#state{lookup_table = LookUpTable}};
 handle_cast({add_zone, Zone, SlaveIPs}, #state{listen_ip = BindIP} = State) ->
     [begin
          {ok, Socket} = gen_tcp:connect(IP, ?ADMIN_PORT, [binary, {active, false}, {ip, BindIP}]),
