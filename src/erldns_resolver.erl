@@ -26,7 +26,7 @@ resolve(Message, AuthorityRecords, {ClientIP, ServerIP}) ->
     resolve(Message, AuthorityRecords, {ClientIP, ServerIP}, Message#dns_message.questions).
 
 %% There were no questions in the message so just return it.
--spec resolve(dns:message(), [dns:rr()], dns:ip(), dns:ip(), [dns:question()]) -> dns:message().
+-spec resolve(dns:message(), [dns:rr()], {dns:ip(), dns:ip()}, [dns:question()]) -> dns:message().
 resolve(Message, _AuthorityRecords, {_ClientIP, _ServerIP}, []) -> Message;
 %% There is one question in the message; resolve it.
 resolve(Message, AuthorityRecords, {ClientIP, ServerIP}, [Question]) ->
@@ -39,11 +39,11 @@ resolve(Message, AuthorityRecords, {ClientIP, ServerIP}, [Question|_]) ->
 %% Step 1: Set the RA bit to false as we do not handle recursive queries.
 resolve(Message, AuthorityRecords, {ClientIP, ServerIP}, Question) when is_record(Question, dns_query) ->
     resolve(Message#dns_message{ra = false}, AuthorityRecords, Question#dns_query.name,
-            Question#dns_query.type, {ClientIP, ServerIP}).
+            Question#dns_query.type, {ClientIP, ServerIP}, erldns_config:get_mode()).
 
 %% With the extracted Qname and Qtype in hand, find the nearest zone
 %% Step 2: Search the available zones for the zone which is the nearest ancestor to QNAME
-resolve(Message, _AuthorityRecords, Qname, ?DNS_TYPE_AXFR = _Qtype, {ClientIP, ServerIP}) ->
+resolve(Message, _AuthorityRecords, Qname, ?DNS_TYPE_AXFR = _Qtype, {ClientIP, ServerIP}, _Mode) ->
     {ok, Zone} = erldns_zone_cache:get_zone_with_records(Qname), % Zone lookup
     %%  Check to make sure the requester is allowed the axfr, and that the server is the master for
     %%  the zone
@@ -63,21 +63,17 @@ resolve(Message, _AuthorityRecords, Qname, ?DNS_TYPE_AXFR = _Qtype, {ClientIP, S
             end,
             Message
     end;
-
 %% When public, erldns should only respond to AXFR. Order here is necessary.
-resolve(Message, AuthorityRecords, Qname, Qtype, {ClientIP, ServerIP}) ->
-    case erldns_config:get_mode() of
-        public ->
-            Zone = erldns_zone_cache:find_zone(Qname, AuthorityRecords), % Zone lookup
-            Records = resolve(Message, Qname, Qtype, Zone, {ClientIP, ServerIP}, _CnameChain = []),
-            additional_processing(rewrite_soa_ttl(Records), ClientIP, Zone);
-        hidden ->
-            Message
-    end.
+resolve(Message, AuthorityRecords, Qname, Qtype, {ClientIP, ServerIP}, Mode) when Mode =:= public ->
+    Zone = erldns_zone_cache:find_zone(Qname, AuthorityRecords), % Zone lookup
+    Records = get_matched_records(Message, Qname, Qtype, Zone, {ClientIP, ServerIP}, _CnameChain = []),
+    additional_processing(rewrite_soa_ttl(Records), ClientIP, Zone);
+resolve(Message, _AuthorityRecords, _Qname, _Qtype, _IP, Mode) when Mode =:= hidden ->
+    Message.
 
 %% No SOA was found for the Qname so we return the root hints
 %% Note: it seems odd that we are indicating we are authoritative here.
-resolve(Message, _Qname, _Qtype, {error, not_authoritative}, {_ClientIP, _ServerIP}, _CnameChain) ->
+get_matched_records(Message, _Qname, _Qtype, {error, not_authoritative}, {_ClientIP, _ServerIP}, _CnameChain) ->
     case erldns_config:use_root_hints() of
         true ->
             {Authority, Additional} = erldns_records:root_hints(),
@@ -87,19 +83,19 @@ resolve(Message, _Qname, _Qtype, {error, not_authoritative}, {_ClientIP, _Server
             Message#dns_message{aa = true, rc = ?DNS_RCODE_NOERROR}
     end;
 
-%% An SOA was found, thus we are authoritative and have the zone.
+%% An SOA was found, thus we are authoritative and have the zone, and we are 'public'.
 %% Step 3: Match records
-resolve(Message, Qname, Qtype, Zone, {ClientIP, ServerIP}, CnameChain) ->
+get_matched_records(Message, Qname, Qtype, Zone, {ClientIP, ServerIP}, CnameChain) ->
     Records = erldns_zone_cache:retrieve_records(ServerIP, Qname),
-    resolve(Message, Qname, Qtype, Records, {ClientIP, ServerIP}, CnameChain, Zone).
+    resolve_records(Message, Qname, Qtype, Records, {ClientIP, ServerIP}, CnameChain, Zone).
 
 %% There were no exact matches on name, so move to the best-match resolution.
-resolve(Message, Qname, Qtype, _MatchedRecords = [], {ClientIP, ServerIP}, CnameChain, Zone) ->
+resolve_records(Message, Qname, Qtype, _MatchedRecords = [], {ClientIP, ServerIP}, CnameChain, Zone) ->
     best_match_resolution(Message, Qname, Qtype, {ClientIP, ServerIP}, CnameChain,
                           best_match(Qname, Zone), Zone);
 
 %% There was at least one exact match on name.
-resolve(Message, Qname, Qtype, MatchedRecords, {ClientIP, ServerIP}, CnameChain, Zone) ->
+resolve_records(Message, Qname, Qtype, MatchedRecords, {ClientIP, ServerIP}, CnameChain, Zone) ->
     exact_match_resolution(Message, Qname, Qtype, {ClientIP, ServerIP}, CnameChain, MatchedRecords, Zone).
 
 %% Determine if there is a CNAME anywhere in the records with the given Qname.
@@ -303,18 +299,18 @@ resolve_exact_match_with_cname(Message, Qtype, {ClientIP, ServerIP}, CnameChain,
 
 %% The CNAME is in the zone so we do not need to look it up again.
 restart_query(Message, Name, Qtype, {ClientIP, ServerIP}, CnameChain, Zone, true) ->
-    resolve(Message, Name, Qtype, Zone, {ClientIP, ServerIP}, CnameChain);
+    get_matched_records(Message, Name, Qtype, Zone, {ClientIP, ServerIP}, CnameChain);
 %% The CNAME is not in the zone, so we need to find the zone using the
 %% CNAME content.
 restart_query(Message, Name, Qtype, {ClientIP, ServerIP}, CnameChain, _Zone, false) ->
-    resolve(Message, Name, Qtype, erldns_zone_cache:find_zone(Name), {ClientIP, ServerIP}, CnameChain).
+    get_matched_records(Message, Name, Qtype, erldns_zone_cache:find_zone(Name), {ClientIP, ServerIP}, CnameChain).
 
 %% Delegated, but in the same zone.
 restart_delegated_query(Message, Name, Qtype, {ClientIP, ServerIP}, CnameChain, Zone, true) ->
-    resolve(Message, Name, Qtype, Zone, {ClientIP, ServerIP}, CnameChain);
+    get_matched_records(Message, Name, Qtype, Zone, {ClientIP, ServerIP}, CnameChain);
 %% Delegated to a different zone.
 restart_delegated_query(Message, Name, Qtype, {ClientIP, ServerIP}, CnameChain, Zone, false) ->
-    resolve(Message, Name, Qtype, erldns_zone_cache:find_zone(Name, Zone#zone.authority),
+    get_matched_records(Message, Name, Qtype, erldns_zone_cache:find_zone(Name, Zone#zone.authority),
             {ClientIP, ServerIP}, CnameChain). % Zone lookup
 
 
