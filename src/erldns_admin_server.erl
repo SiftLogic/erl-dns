@@ -53,19 +53,31 @@ start_link(_Name, ListenIP, Port) ->
     gen_nb_server:start_link({local, ?MODULE}, ListenIP, Port, [Port, ListenIP]).
 
 %% Geo-location API
+%% @doc Adds a new geogroup to the DB.
+%% NOTE: Because zone data has a normalized name (lower case), we need to make the name of the
+%% geo group lower case as well so we can properly select it.
+%% @end
+-spec create_geogroup(binary(), binary(), list(binary())) -> ok | {error, term()}.
 create_geogroup(Name, Country, Regions) ->
-    erldns_storage:insert(geolocation, #geolocation{name = Name,
+    %% TODO Ensure no duplicates are being added. This includes duplicate regions
+    erldns_storage:insert(geolocation, #geolocation{name = normalize_name(Name),
                                                     continent = proplists:get_value(Country, ?COUNTRY_CODES),
                                                     country = Country, regions = Regions}).
 
+%% @doc Deletes a geogroup from the DB.
+-spec delete_geogroup(binary()) -> ok | {error, term()}.
 delete_geogroup(Name) ->
-    erldns_storage:delete(geolocation, Name).
+    erldns_storage:delete(geolocation, normalize_name(Name)).
 
+%% @doc Takes the name of the geogroup to be modified, and a new list of region(s) to add to it.
+-spec update_geogroup(binary(), binary() | list(binary())) -> ok | {error, term()}.
 update_geogroup(Name, Region) ->
-    [{_Name, #geolocation{regions = Regions0} = Geo}] = erldns_storage:select(geolocation, Name),
-    erldns_storage:delete(geolocation, Name),
+    %% TODO, ensure the geogroup exists first. And ensure no duplicate regions are being added.
+    NormalizedName = normalize_name(Name),
+    [{_Name, Geo}] = erldns_storage:select(geolocation, NormalizedName),
+    erldns_storage:delete(geolocation, NormalizedName),
     erldns_storage:insert(geolocation,
-                          Geo#geolocation{regions = [Region | Regions0]}).
+                          Geo#geolocation{regions = Region}).
 
 list_geogroups() ->
     ok.
@@ -169,3 +181,20 @@ new_connection(Socket, State) ->
 
 code_change(_PreviousVersion, State, _Extra) ->
     {ok, State}.
+
+%% Private functiosns
+normalize_name(Name) when is_list(Name) -> bin_to_lower(list_to_binary(Name));
+normalize_name(Name) when is_binary(Name) -> bin_to_lower(Name).
+
+%% @doc Takes a binary arguments, and transforms it to lower case. Self said!
+-spec bin_to_lower(Bin :: binary()) -> binary().
+bin_to_lower(Bin) ->
+    bin_to_lower(Bin, <<>>).
+
+bin_to_lower(<<>>, Acc) ->
+    Acc;
+bin_to_lower(<<H, T/binary>>, Acc) when H >= $A, H =< $Z ->
+    H2 = H + 32,
+    bin_to_lower(T, <<Acc/binary, H2>>);
+bin_to_lower(<<H, T/binary>>, Acc) ->
+    bin_to_lower(T, <<Acc/binary, H>>).
