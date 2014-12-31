@@ -119,7 +119,7 @@
                 }
             },
             {
-                "name": "US-EAST_ns2.example.com",
+                "name": "_geo.US-EAST_ns2.example.com",
                 "type": "TXT",
                 "ttl": 3600,
                 "data": {
@@ -127,7 +127,7 @@
                 }
             },
             {
-                "name": "US-WEST_ns2.example.com",
+                "name": "_geo.US-WEST_ns2.example.com",
                 "type": "TXT",
                 "ttl": 3600,
                 "data": {
