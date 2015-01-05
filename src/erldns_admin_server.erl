@@ -44,12 +44,13 @@
 
 -define(SERVER, ?MODULE).
 
--record(state, {port, listen_ip, lookup_table}).
+-record(state, {port, listen_ip}).
 
 %% Public API
 start_link(_Name, ListenIP, Port) ->
     erldns_log:info("Starting ADMIN server on port ~p, IP ~p", [Port, ListenIP]),
-    erldns_storage:create(geolocation),
+    ok = erldns_storage:create(geolocation),
+    create_lookup_table(),
     gen_nb_server:start_link({local, ?MODULE}, ListenIP, Port, [Port, ListenIP]).
 
 %% Geo-location API
@@ -70,10 +71,11 @@ create_geogroup(Name, Country, Regions) ->
             end, [], Geo)),
             case no_duplicate_region(Regions, StoredRegions) of
                 true ->
-                    erldns_storage:insert(geolocation, #geolocation{name = NormalizedName,
-                                                                    continent = proplists:get_value(Country, ?COUNTRY_CODES),
-                                                                    country = Country, regions = Regions}),
-                    generate_lookup_table();
+                    NewGeo = #geolocation{name = NormalizedName,
+                                          continent = proplists:get_value(Country, ?COUNTRY_CODES),
+                                          country = Country, regions = Regions},
+                    erldns_storage:insert(geolocation, NewGeo),
+                    add_to_lookup_table(NormalizedName, NewGeo#geolocation.continent, Country, Regions);
                 false ->
                     {error, duplicate_region}
             end
@@ -82,8 +84,9 @@ create_geogroup(Name, Country, Regions) ->
 %% @doc Deletes a geogroup from the DB.
 -spec delete_geogroup(binary()) -> ok | {error, term()}.
 delete_geogroup(Name) ->
-    erldns_storage:delete(geolocation, normalize_name(Name)),
-    generate_lookup_table().
+    NormalizedName = normalize_name(Name),
+    erldns_storage:delete(geolocation, NormalizedName),
+    delete_from_lookup_table(NormalizedName).
 
 %% @doc Takes the name of the geogroup to be modified, and a new list of region(s) to add to it.
 -spec update_geogroup(binary(), list(binary())) -> ok | {error, term()}.
@@ -102,9 +105,8 @@ update_geogroup(Name, NewRegion) ->
             case no_duplicate_region(NewRegion, StoredRegions) of
                 true ->
                     erldns_storage:delete(geolocation, NormalizedName),
-                    erldns_storage:insert(geolocation,
-                                          Geo#geolocation{regions = NewRegion}),
-                    generate_lookup_table();
+                    erldns_storage:insert(geolocation, Geo#geolocation{regions = NewRegion}),
+                    update_lookup_table(NormalizedName, NewRegion);
                 false ->
                     {error, duplicate_region}
             end;
@@ -113,20 +115,8 @@ update_geogroup(Name, NewRegion) ->
     end.
 
 list_geogroups() ->
-    ets:tab2list(geolocation).
-
-%% @doc Takes a list of regions and checks to see if there are any duplicates in the stored regions.
--spec no_duplicate_region(list(binary()), list(binary())) -> true | false.
-no_duplicate_region(Regions, StoredRegions) ->
-    try [false = lists:member(X, StoredRegions) || X <- Regions] of
-        _NoDuplicates -> true
-    catch
-        error:_X ->
-            false
-    end.
-
-generate_lookup_table() ->
-    gen_server:cast(erldns_admin_server, generate_lookup_table).
+    Pattern = #geolocation{name = '_', continent = '_', country = '_', regions = '_'},
+    erldns_storage:select(geolocation, Pattern, 0).
 
 %% gen_server hooks
 init([Port, ListenIP]) ->
@@ -135,18 +125,6 @@ init([Port, ListenIP]) ->
 handle_call(_Request, _From, State) ->
     {ok, State}.
 
-handle_cast(generate_lookup_table, State) ->
-    %% TODO Generate the lookup table in ets.
-    %% 1. A *user* (read me) wants to have geo-located records for a domain
-    %% 2. I use the API to create a georegion (the #daregion{} instance) named 'us-east', which include Florida, New York, and Georgia (cause we don't like the other states)
-    %% 3. The 'system' saves my definition in the database so I can re-use it whenever I want
-    %% 4. The system then creates the entries in the lookup table (ets) for the full set of combinations
-    %% eg
-    %% {{1, <<"US">>,<<"FL">>}, <<"us-east">>},
-    %% {{1, <<"US">>,<<"NY">>}, <<"us-east">>},
-    %% {{1, <<"US">>,<<GA">>}, <<"us-east">>}
-    LookUpTable = ok,
-    {noreply, State#state{lookup_table = LookUpTable}};
 handle_cast({add_zone, Zone, SlaveIPs}, #state{listen_ip = BindIP} = State) ->
     [begin
          {ok, Socket} = gen_tcp:connect(IP, ?ADMIN_PORT, [binary, {active, false}, {ip, BindIP}]),
@@ -240,7 +218,17 @@ new_connection(Socket, State) ->
 code_change(_PreviousVersion, State, _Extra) ->
     {ok, State}.
 
-%% Private functiosns
+%% Private functions
+%% @doc Takes a list of regions and checks to see if there are any duplicates in the stored regions.
+-spec no_duplicate_region(list(binary()), list(binary())) -> true | false.
+no_duplicate_region(Regions, StoredRegions) ->
+    try [false = lists:member(X, StoredRegions) || X <- Regions] of
+        _NoDuplicates -> true
+    catch
+        error:_X ->
+            false
+    end.
+
 normalize_name(Name) when is_list(Name) -> bin_to_lower(list_to_binary(Name));
 normalize_name(Name) when is_binary(Name) -> bin_to_lower(Name).
 
@@ -256,3 +244,31 @@ bin_to_lower(<<H, T/binary>>, Acc) when H >= $A, H =< $Z ->
     bin_to_lower(T, <<Acc/binary, H2>>);
 bin_to_lower(<<H, T/binary>>, Acc) ->
     bin_to_lower(T, <<Acc/binary, H>>).
+
+%% Lookup table functions
+create_lookup_table() ->
+    ok = erldns_storage:create(lookup_table),
+    Pattern = #geolocation{name = '_', continent = '_', country = '_', regions = '_'},
+    [add_subregions(Geo#geolocation.continent, Geo#geolocation.country, Geo#geolocation.regions, Geo#geolocation.name)
+     || Geo <- erldns_storage:select(geolocation, Pattern, 0)].
+
+add_to_lookup_table(Name, Continent, Country, Regions) ->
+    ok = erldns_storage:create(lookup_table),
+    add_subregions(Continent, Country, Regions, Name).
+
+update_lookup_table(NormalizedName, NewRegion) ->
+    ok = erldns_storage:create(lookup_table),
+    delete_from_lookup_table(NormalizedName),
+    [{_Name, Geo}] = erldns_storage:select(geolocation, NormalizedName),
+    add_subregions(Geo#geolocation.continent, Geo#geolocation.country, NewRegion, Geo#geolocation.name).
+
+delete_from_lookup_table(NormalizedName) ->
+    ok = erldns_storage:create(lookup_table),
+    erldns_storage:delete(lookup_table, NormalizedName).
+
+list_lookup_table() ->
+    ok = erldns_storage:create(lookup_table),
+    ets:tab2list(lookup_table).
+
+add_subregions(Continent, Country, Regions, Name) ->
+    [erldns_storage:insert(lookup_table, {{Continent, Country, SubRegion}, Name}) || SubRegion <- Regions].

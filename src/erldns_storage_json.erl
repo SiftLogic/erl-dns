@@ -78,6 +78,18 @@ create(host_throttle) ->
         _InfoList ->
             ok
     end;
+create(lookup_table) ->
+    case ets:info(lookup_table) of
+        undefined ->
+            case ets:new(lookup_table, [public, named_table, bag, {keypos, 2}]) of
+                lookup_table ->
+                    ok;
+                Error ->
+                    {error, Error}
+            end;
+        _InfoList ->
+            ok
+    end;
 create(handler_registry) ->
     case ets:info(handler_registry) of
         undefined ->

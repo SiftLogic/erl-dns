@@ -193,5 +193,7 @@ mod(handler_registry) ->
     erldns_storage_json;
 mod(geolocation) ->
     erldns_storage_mnesia;
+mod(lookup_table) ->
+    erldns_storage_json;
 mod(_Table) ->
     erldns_config:storage_type().
