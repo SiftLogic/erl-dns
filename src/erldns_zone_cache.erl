@@ -78,7 +78,7 @@
          code_change/3
         ]).
 
--export([get_region/3]).
+-export([get_region/6]).
 
 -define(SERVER, ?MODULE).
 
@@ -316,46 +316,74 @@ query_master_for_records(MasterIP, ServerIP, QueryList) ->
 %% @doc This functin recieves a list of dns_rr records and does all the magic as far as geolocation.
 %% It will remove geolocation records, and match geolocation data with the record. It will remove duplicates
 %% TEST FUNCTIONS ----------------------------------
-match_georecords({127, 0, 0, 1}, _Qname, _Qtype) ->
+match_georecords({{127,0,0,1}, _ServerIP}, _Qname, _Qtype) ->
     [];
 %%     get_region(<<"NA">>, [], []);
-match_georecords({10, 1, 10, 51}, _Qname, _Qtype) ->
-    [];
+match_georecords({{10,1,10,51}, ServerIP}, Qname, Qtype) ->
+    get_region(<<"NA">>, <<"US">>, <<"FL">>, Qname, Qtype, ServerIP);
 %% TEST FUNCTIONS ----------------------------------
-match_georecords(ClientIP, _Qname, _Qtype) ->
+match_georecords({ServerIP, ClientIP}, Qname, Qtype) ->
     {ok, #geoip{country_code = Country, region = SubRegion}} = egeoip:lookup(ClientIP),
-    get_region(proplists:get_value(Country, ?COUNTRY_CODES), Country, SubRegion).
+    get_region(proplists:get_value(Country, ?COUNTRY_CODES), Country, SubRegion, Qname, Qtype, ServerIP).
 
-get_region(Continent, Country, SubRegion) ->
-    Matches = compose_match([{continent, Continent}, {country, Country}, {sub_region, SubRegion}]),
-    try erldns_storage:select(lookup_table, Matches, 1000) of
-        '$end_of_table' ->
-            [];
-        {MatchedRecords, '$end_of_table'} ->
-            List = [RegionName ||  {{_Continent, _Country, _SubRegion}, RegionName} <- MatchedRecords],
-            Set = sets:from_list(List),
-            sets:to_list(Set)
-    catch
-        Error:Msg ->
-            {error, {Error, Msg}}
-    end.
-
-compose_match(Commands) ->
-    compose_match(Commands, []).
-
-compose_match([], Acc) ->
-    [{{{'$1','$2','$3'},'$5'}, Acc,  ['$_']}];
-compose_match([H | T], Acc) ->
-    case H of
-        {continent, Continent} when Continent =/= [] ->
-            compose_match(T, [{'==', '$1', Continent} | Acc]);
-        {country, Country} when Country =/= [] ->
-            compose_match(T, [{'==', '$2', Country} | Acc]);
-        {sub_region, SubRegion} when SubRegion =/= [] ->
-            compose_match(T, [{'==', '$3', SubRegion} | Acc]);
+get_region(Continent, Country, SubRegion, Qname, Qtype, ServerIP) ->
+    case erldns_storage:select(lookup_table, {Continent, Country, SubRegion}) of
+        [{{_Continent, _Country, _SubRegion}, RegionName}] ->
+            filter_georecords(RegionName, Qname, Qtype, ServerIP);
         _ ->
-            compose_match(T, Acc)
+            []
     end.
+
+filter_georecords(RegionName, QName, QType, _ServerIP) ->
+    {ok, Zone} = get_zone_with_records(QName),
+    filter_georecords(RegionName, QName, QType, Zone#zone.records, []).
+
+filter_georecords(_RegionName, _QName, _QType,  [], Acc) ->
+    erldns_log:info("RETURN: ~p", [Acc]),
+    Acc;
+filter_georecords(RegionName, QName, QType, [H | T], Acc) ->
+    RegionSize = byte_size(RegionName),
+    erldns_log:info("Matching ~p", [<<"_geo.", RegionName:RegionSize/binary, ".", QName/binary>>]),
+    erldns_log:info("Against ~p", [H#dns_rr.name]),
+    erldns_log:info("Type: ~p -> ~p", [H#dns_rr.type, QType]),
+    case H of
+        #dns_rr{name = <<"_geo.", RegionName:RegionSize/binary, ".", QName/binary>>, type = QType} ->
+            filter_georecords(RegionName, QName, QType, T, [H | Acc]);
+        _ ->
+            filter_georecords(RegionName, QName, QType, T, Acc)
+    end.
+
+
+%% get_region(_Continent, _Country, _SubRegion) ->
+%%     Matches = compose_match([{continent, Continent}, {country, Country}, {sub_region, SubRegion}]),
+%%     try erldns_storage:select(lookup_table, Matches, 1000) of
+%%         '$end_of_table' ->
+%%             [];
+%%         {MatchedRecords, '$end_of_table'} ->
+%%             List = [RegionName ||  {{_Continent, _Country, _SubRegion}, RegionName} <- MatchedRecords],
+%%             Set = sets:from_list(List),
+%%             sets:to_list(Set)
+%%     catch
+%%         Error:Msg ->
+%%             {error, {Error, Msg}}
+%%     end.
+
+%% compose_match(Commands) ->
+%%     compose_match(Commands, []).
+%%
+%% compose_match([], Acc) ->
+%%     [{{{'$1','$2','$3'},'$5'}, Acc,  ['$_']}];
+%% compose_match([H | T], Acc) ->
+%%     case H of
+%%         {continent, Continent} when Continent =/= [] ->
+%%             compose_match(T, [{'==', '$1', Continent} | Acc]);
+%%         {country, Country} when Country =/= [] ->
+%%             compose_match(T, [{'==', '$2', Country} | Acc]);
+%%         {sub_region, SubRegion} when SubRegion =/= [] ->
+%%             compose_match(T, [{'==', '$3', SubRegion} | Acc]);
+%%         _ ->
+%%             compose_match(T, Acc)
+%%     end.
 
 %% @doc Check if the name is in a zone.
 -spec in_zone(binary()) -> boolean().

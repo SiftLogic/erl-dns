@@ -143,8 +143,8 @@ backup_tables() ->
 
 %% @doc Select from ets using key, value.
 -spec select(atom(), term()) -> tuple().
-select(Key, Value) ->
-    ets:lookup(Key, Value).
+select(Table, Key) ->
+    ets:lookup(Table, Key).
 
 %% @doc Select from ets using match specs.
 -spec select(atom(), list(), integer()) -> tuple() | '$end_of_table'.
