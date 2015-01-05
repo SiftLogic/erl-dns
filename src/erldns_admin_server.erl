@@ -61,11 +61,9 @@ start_link(_Name, ListenIP, Port) ->
 -spec create_geogroup(binary(), binary(), list(binary())) -> ok | {error, term()}.
 create_geogroup(Name, Country, Regions) ->
     NormalizedName = normalize_name(Name),
-    Geo = ets:tab2list(geolocation),
-    case lists:keymember(NormalizedName, 2, Geo) of
-        true ->
-            {error, already_exists};
-        false ->
+    Pattern = #geolocation{name = NormalizedName, continent = '_', country = '_', regions = '_'},
+    case erldns_storage:select(geolocation, Pattern, 0) of
+        [] ->
             StoredRegions = lists:foldl(fun({{_Continent,_Country, Region}, _Name}, Acc) ->
                                                               [Region | Acc]
                                                       end, [], list_lookup_table()),
@@ -78,7 +76,9 @@ create_geogroup(Name, Country, Regions) ->
                     add_to_lookup_table(NormalizedName, NewGeo#geolocation.continent, Country, Regions);
                 false ->
                     {error, duplicate_region}
-            end
+            end;
+        _ ->
+            {error, already_exists}
     end.
 
 %% @doc Deletes a geogroup from the DB.
