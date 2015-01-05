@@ -85,15 +85,17 @@ create_geogroup(Name, Country, Regions) ->
 -spec delete_geogroup(binary()) -> ok | {error, term()}.
 delete_geogroup(Name) ->
     NormalizedName = normalize_name(Name),
+    [{_Name, #geolocation{continent = Continent, country = Country, regions = OldRegion}}] =
+        erldns_storage:select(geolocation, NormalizedName),
     erldns_storage:delete(geolocation, NormalizedName),
-    delete_from_lookup_table(NormalizedName).
+    delete_from_lookup_table(Continent, Country, OldRegion).
 
 %% @doc Takes the name of the geogroup to be modified, and a new list of region(s) to add to it.
 -spec update_geogroup(binary(), list(binary())) -> ok | {error, term()}.
 update_geogroup(Name, NewRegion) ->
     NormalizedName = normalize_name(Name),
     case erldns_storage:select(geolocation, NormalizedName) of
-        [{_Name, Geo}] ->
+        [{_Name, #geolocation{continent = Continent, country = Country, regions = OldRegion} = Geo}] ->
             StoredRegions = lists:flatten(lists:foldl(fun({{_Continent,_Country, Region}, Name0}, Acc) ->
                                                               case Name0 =/= NormalizedName of
                                                                   true ->
@@ -106,7 +108,7 @@ update_geogroup(Name, NewRegion) ->
                 true ->
                     erldns_storage:delete(geolocation, NormalizedName),
                     erldns_storage:insert(geolocation, Geo#geolocation{regions = NewRegion}),
-                    update_lookup_table(NormalizedName, NewRegion);
+                    update_lookup_table(NormalizedName, NewRegion, {Continent, Country, OldRegion});
                 false ->
                     {error, duplicate_region}
             end;
@@ -256,15 +258,14 @@ add_to_lookup_table(Name, Continent, Country, Regions) ->
     ok = erldns_storage:create(lookup_table),
     add_subregions(Continent, Country, Regions, Name).
 
-update_lookup_table(NormalizedName, NewRegion) ->
+update_lookup_table(NormalizedName, NewRegion, {Continent, Country, OldRegion}) ->
     ok = erldns_storage:create(lookup_table),
-    delete_from_lookup_table(NormalizedName),
-    [{_Name, Geo}] = erldns_storage:select(geolocation, NormalizedName),
-    add_subregions(Geo#geolocation.continent, Geo#geolocation.country, NewRegion, Geo#geolocation.name).
+    delete_from_lookup_table(Continent, Country, OldRegion),
+    add_subregions(Continent, Country, NewRegion, NormalizedName).
 
-delete_from_lookup_table(NormalizedName) ->
+delete_from_lookup_table(Continent, Country, Regions) ->
     ok = erldns_storage:create(lookup_table),
-    erldns_storage:delete(lookup_table, NormalizedName).
+    [erldns_storage:delete(lookup_table, {Continent, Country, Region}) || Region <- Regions].
 
 list_lookup_table() ->
     ok = erldns_storage:create(lookup_table),

@@ -81,7 +81,7 @@ create(host_throttle) ->
 create(lookup_table) ->
     case ets:info(lookup_table) of
         undefined ->
-            case ets:new(lookup_table, [public, named_table, bag, {keypos, 2}]) of
+            case ets:new(lookup_table, [public, named_table, bag]) of
                 lookup_table ->
                     ok;
                 Error ->
