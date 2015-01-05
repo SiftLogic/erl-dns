@@ -65,8 +65,8 @@ create_geogroup(Name, Country, Regions) ->
     case erldns_storage:select(geolocation, Pattern, 0) of
         [] ->
             StoredRegions = lists:foldl(fun({{_Continent,_Country, Region}, _Name}, Acc) ->
-                                                              [Region | Acc]
-                                                      end, [], list_lookup_table()),
+                                                [Region | Acc]
+                                        end, [], list_lookup_table()),
             case no_duplicate_region(Regions, StoredRegions) of
                 true ->
                     NewGeo = #geolocation{name = NormalizedName,
