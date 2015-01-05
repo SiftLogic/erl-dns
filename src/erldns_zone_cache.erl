@@ -272,7 +272,6 @@ retrieve_records(ServerIP, Qname) ->
                       get_records_by_name(Name);
                   false ->
                       %% We are slave, get the zone in the cache and the records from the dict with expirys.
-                      %% TODO Match A/AAAA records with geolocation data.
                       case find_zone_in_cache(Name) of
                           {ok, Zone} ->
                               case dict:find(Name, Zone#zone.records_by_name) of
@@ -284,6 +283,7 @@ retrieve_records(ServerIP, Qname) ->
                               []
                       end
               end,
+    %% TODO Match records with geolocation data.
     match_georecords(Records),
     Records.
 
