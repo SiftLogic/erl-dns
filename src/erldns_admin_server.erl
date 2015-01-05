@@ -66,9 +66,9 @@ create_geogroup(Name, Country, Regions) ->
         true ->
             {error, already_exists};
         false ->
-            StoredRegions = lists:flatten(lists:foldl(fun({geolocation, _Name, _Continent, _Country, Region}, Acc) ->
-                [Region | Acc]
-            end, [], Geo)),
+            StoredRegions = lists:foldl(fun({{_Continent,_Country, Region}, _Name}, Acc) ->
+                                                              [Region | Acc]
+                                                      end, [], list_lookup_table()),
             case no_duplicate_region(Regions, StoredRegions) of
                 true ->
                     NewGeo = #geolocation{name = NormalizedName,
@@ -94,14 +94,14 @@ update_geogroup(Name, NewRegion) ->
     NormalizedName = normalize_name(Name),
     case erldns_storage:select(geolocation, NormalizedName) of
         [{_Name, Geo}] ->
-            StoredRegions = lists:flatten(lists:foldl(fun({geolocation, Name0, _Continent, _Country, Region}, Acc) ->
-                case Name0 =/= NormalizedName of
-                    true ->
-                        [Region | Acc];
-                    false ->
-                        Acc
-                end
-            end, [], ets:tab2list(geolocation))),
+            StoredRegions = lists:flatten(lists:foldl(fun({{_Continent,_Country, Region}, Name0}, Acc) ->
+                                                              case Name0 =/= NormalizedName of
+                                                                  true ->
+                                                                      [Region | Acc];
+                                                                  false ->
+                                                                      Acc
+                                                              end
+                                                      end, [], list_lookup_table())),
             case no_duplicate_region(NewRegion, StoredRegions) of
                 true ->
                     erldns_storage:delete(geolocation, NormalizedName),
