@@ -24,12 +24,14 @@
          server_children_test/1,
          test_zone_modify/1,
          increment_soa/1,
-         query_tests/1]).
+         query_tests/1,
+         test_geolocation_api/1]).
 
 -include("../include/erldns.hrl").
 -include("../deps/dns/include/dns.hrl").
 all() ->
-    [mnesia_API_test, json_API_test, server_children_test, test_zone_modify, increment_soa, query_tests].
+    [mnesia_API_test, json_API_test, server_children_test, test_zone_modify, increment_soa, query_tests,
+     test_geolocation_api].
 
 init_per_suite(Config) ->
     application:start(erldns_app),
@@ -57,6 +59,13 @@ init_per_testcase(test_zone_modify, Config) ->
 init_per_testcase(increment_soa, Config) ->
     Config;
 init_per_testcase(query_tests, Config) ->
+    Config;
+init_per_testcase(test_geolocation_api, Config) ->
+    application:set_env(erldns, storage, [{type, erldns_storage_mnesia}, {dir, "test_db5"}]),
+    ok =  erldns_storage:create(schema),
+    ok = erldns_storage:create(zones),
+    ok = erldns_storage:create(geolocation),
+    ok = erldns_storage:create(lookup_table),
     Config.
 
 mnesia_API_test(_Config) ->
@@ -223,3 +232,14 @@ query_tests(_Config) ->
               "NAPTR: ~p~n"
               "AFXR: ~p~n",
               [A, B, C, D, E, F, G, H, I, J, K]).
+
+test_geolocation_api(_Config) ->
+    erldns_admin_server:create_geogroup(<<"US-EAST">>, <<"US">>, [<<"FL">>, <<"GA">>]),
+    true = (length(ets:tab2list(lookup_table)) =:= 2),
+    erldns_admin_server:create_geogroup(<<"US-CENTRAL">>, <<"US">>, [<<"OK">>, <<"KS">>]),
+    true = (length(ets:tab2list(lookup_table)) =:= 4),
+    {error, duplicate_region} = erldns_admin_server:update_geogroup(<<"US-EAST">>, [<<"OK">>]),
+    erldns_admin_server:update_geogroup(<<"US-EAST">>, [<<"FL">>]),
+    true = (length(ets:tab2list(lookup_table)) =:= 3),
+    erldns_admin_server:delete_geogroup(<<"US-EAST">>),
+    true = (length(ets:tab2list(lookup_table)) =:= 2).
