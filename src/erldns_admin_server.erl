@@ -59,11 +59,25 @@ start_link(_Name, ListenIP, Port) ->
 %% @end
 -spec create_geogroup(binary(), binary(), list(binary())) -> ok | {error, term()}.
 create_geogroup(Name, Country, Regions) ->
-    %% TODO Ensure no duplicates are being added. This includes duplicate regions
-    erldns_storage:insert(geolocation, #geolocation{name = normalize_name(Name),
-                                                    continent = proplists:get_value(Country, ?COUNTRY_CODES),
-                                                    country = Country, regions = Regions}),
-    generate_lookup_table().
+    NormalizedName = normalize_name(Name),
+    Geo = ets:tab2list(geolocation),
+    case lists:keymember(NormalizedName, 2, Geo) of
+        true ->
+            {error, already_exists};
+        false ->
+            StoredRegions = lists:flatten(lists:foldl(fun({geolocation, _Name, _Continent, _Country, Region}, Acc) ->
+                [Region | Acc]
+            end, [], Geo)),
+            case no_duplicate_region(Regions, StoredRegions) of
+                true ->
+                    erldns_storage:insert(geolocation, #geolocation{name = NormalizedName,
+                                                                    continent = proplists:get_value(Country, ?COUNTRY_CODES),
+                                                                    country = Country, regions = Regions}),
+                    generate_lookup_table();
+                false ->
+                    {error, duplicate_region}
+            end
+    end.
 
 %% @doc Deletes a geogroup from the DB.
 -spec delete_geogroup(binary()) -> ok | {error, term()}.
@@ -72,18 +86,44 @@ delete_geogroup(Name) ->
     generate_lookup_table().
 
 %% @doc Takes the name of the geogroup to be modified, and a new list of region(s) to add to it.
--spec update_geogroup(binary(), binary() | list(binary())) -> ok | {error, term()}.
-update_geogroup(Name, Region) ->
-    %% TODO, ensure the geogroup exists first. And ensure no duplicate regions are being added.
+-spec update_geogroup(binary(), list(binary())) -> ok | {error, term()}.
+update_geogroup(Name, NewRegion) ->
     NormalizedName = normalize_name(Name),
-    [{_Name, Geo}] = erldns_storage:select(geolocation, NormalizedName),
-    erldns_storage:delete(geolocation, NormalizedName),
-    erldns_storage:insert(geolocation,
-                          Geo#geolocation{regions = Region}),
-    generate_lookup_table().
+    case erldns_storage:select(geolocation, NormalizedName) of
+        [{_Name, Geo}] ->
+            StoredRegions = lists:flatten(lists:foldl(fun({geolocation, Name0, _Continent, _Country, Region}, Acc) ->
+                case Name0 =/= NormalizedName of
+                    true ->
+                        [Region | Acc];
+                    false ->
+                        Acc
+                end
+            end, [], ets:tab2list(geolocation))),
+            case no_duplicate_region(NewRegion, StoredRegions) of
+                true ->
+                    erldns_storage:delete(geolocation, NormalizedName),
+                    erldns_storage:insert(geolocation,
+                                          Geo#geolocation{regions = NewRegion}),
+                    generate_lookup_table();
+                false ->
+                    {error, duplicate_region}
+            end;
+        _ ->
+            {error, doesnt_exist}
+    end.
 
 list_geogroups() ->
-    ok.
+    ets:tab2list(geolocation).
+
+%% @doc Takes a list of regions and checks to see if there are any duplicates in the stored regions.
+-spec no_duplicate_region(list(binary()), list(binary())) -> true | false.
+no_duplicate_region(Regions, StoredRegions) ->
+    try [false = lists:member(X, StoredRegions) || X <- Regions] of
+        _NoDuplicates -> true
+    catch
+        error:_X ->
+            false
+    end.
 
 generate_lookup_table() ->
     gen_server:cast(erldns_admin_server, generate_lookup_table).
