@@ -98,7 +98,7 @@ find_zone(Qname) ->
 
 %% @doc Find a zone for a given qname.
 -spec find_zone(dns:dname(), {error, any()} | {ok, dns:rr()} | [dns:rr()] | dns:rr()) ->
-                       {ok, #zone{}} | {error, {zone_not_found, binary()}} | {error, not_authoritative}.
+                       #zone{} | {error, {zone_not_found, binary()}} | {error, not_authoritative}.
 find_zone(Qname, {error, _}) ->
     find_zone(Qname, []);
 find_zone(Qname, {ok, Authority}) ->

@@ -65,42 +65,74 @@ resolve(Message, _AuthorityRecords, Qname, ?DNS_TYPE_AXFR = _Qtype, {ClientIP, S
     end;
 %% When public, erldns should only respond to AXFR. Order here is necessary.
 resolve(Message, AuthorityRecords, Qname, Qtype, {ClientIP, ServerIP}, Mode) when Mode =:= public ->
-    Zone = erldns_zone_cache:find_zone(Qname, AuthorityRecords), % Zone lookup
-    %% @todo We need to make sure we are getting the most up to date records. At this point, this will
-    %% @todo only happen if match_georecords returns no records.
-    Records = case erldns_config:supports_geo() of
-                  true ->
-                      case erldns_zone_cache:match_georecords(ClientIP, Qname, Qtype) of
-                          [] ->
-                              get_matched_records(Message, Qname, Qtype, Zone, {ClientIP, ServerIP},
-                                                  _CnameChain = []);
-                          MatchedRecords ->
-                              Message#dns_message{answers = MatchedRecords}
-                      end;
-                  false ->
-                      get_matched_records(Message, Qname, Qtype, Zone, {ClientIP, ServerIP},
-                                          _CnameChain = [])
-              end,
-    additional_processing(rewrite_soa_ttl(Records), ClientIP, Zone);
+    {AnswerToQuery, Zone} = case erldns_zone_cache:find_zone(Qname, AuthorityRecords) of
+                                {error, not_authoratative} = Error ->
+                                    case erldns_config:use_root_hints() of
+                                        true ->
+                                            {Authority, Additional} = erldns_records:root_hints(),
+                                            {Message#dns_message{aa = true, rc = ?DNS_RCODE_NOERROR, authority = Authority,
+                                                                 additional = Additional}, Error};
+                                        _ ->
+                                            {Message#dns_message{aa = true, rc = ?DNS_RCODE_NOERROR}, Error}
+                                    end;
+                                {error, _Reason} = Error ->
+                                    {Message, Error};
+                                Zone0 ->
+                                    Records = erldns_zone_cache:retrieve_records(ServerIP, Qname),
+                                    case erldns_config:supports_geo() of
+                                        true ->
+                                            case erldns_zone_cache:match_georecords(ClientIP, Qname, Qtype) of
+                                                [] ->
+                                                    {get_matched_records(Message, Qname, Qtype, Zone0, Records,
+                                                                         {ClientIP, ServerIP}, _CnameChain = []), Zone0};
+                                                MatchedRecords ->
+                                                    {Message#dns_message{answers = MatchedRecords}, Zone0}
+                                            end;
+                                        false ->
+                                            {get_matched_records(Message, Qname, Qtype, Zone0, Records,
+                                                                 {ClientIP, ServerIP}, _CnameChain = []), Zone0}
+                                    end
+                            end,
+    additional_processing(rewrite_soa_ttl(AnswerToQuery), ClientIP, Zone);
+%% resolve(Message, AuthorityRecords, Qname, Qtype, {ClientIP, ServerIP}, Mode) when Mode =:= public ->
+%%     Zone = erldns_zone_cache:find_zone(Qname, AuthorityRecords), % Zone lookup
+%%     %% @todo We need to make sure we are getting the most up to date records. At this point, this will
+%%     %% @todo only happen if match_georecords returns no records.
+%%     AnswerToQuery = case erldns_config:supports_geo() of
+%%                         true ->
+%%                             case erldns_zone_cache:match_georecords(ClientIP, Qname, Qtype) of
+%%                                 [] ->
+%%                                     get_matched_records(Message, Qname, Qtype, Zone, {ClientIP, ServerIP},
+%%                                                         _CnameChain = []);
+%%                                 MatchedRecords ->
+%%                                     Message#dns_message{answers = MatchedRecords}
+%%                             end;
+%%                         false ->
+%%                             get_matched_records(Message, Qname, Qtype, Zone, {ClientIP, ServerIP},
+%%                                                 _CnameChain = [])
+%%                     end,
+%%     additional_processing(rewrite_soa_ttl(AnswerToQuery), ClientIP, Zone);
 resolve(Message, _AuthorityRecords, _Qname, _Qtype, _IP, Mode) when Mode =:= hidden ->
     Message.
 
 %% No SOA was found for the Qname so we return the root hints
 %% Note: it seems odd that we are indicating we are authoritative here.
-get_matched_records(Message, _Qname, _Qtype, {error, not_authoritative}, {_ClientIP, _ServerIP}, _CnameChain) ->
-    case erldns_config:use_root_hints() of
-        true ->
-            {Authority, Additional} = erldns_records:root_hints(),
-            Message#dns_message{aa = true, rc = ?DNS_RCODE_NOERROR, authority = Authority,
-                                additional = Additional};
-        _ ->
-            Message#dns_message{aa = true, rc = ?DNS_RCODE_NOERROR}
-    end;
+%% get_matched_records(Message, _Qname, _Qtype, {error, not_authoritative}, {_ClientIP, _ServerIP}, _CnameChain) ->
+%%     case erldns_config:use_root_hints() of
+%%         true ->
+%%             {Authority, Additional} = erldns_records:root_hints(),
+%%             Message#dns_message{aa = true, rc = ?DNS_RCODE_NOERROR, authority = Authority,
+%%                                 additional = Additional};
+%%         _ ->
+%%             Message#dns_message{aa = true, rc = ?DNS_RCODE_NOERROR}
+%%     end;
 
 %% An SOA was found, thus we are authoritative and have the zone, and we are 'public'.
 %% Step 3: Match records
 get_matched_records(Message, Qname, Qtype, Zone, {ClientIP, ServerIP}, CnameChain) ->
     Records = erldns_zone_cache:retrieve_records(ServerIP, Qname),
+    resolve_records(Message, Qname, Qtype, Records, {ClientIP, ServerIP}, CnameChain, Zone).
+get_matched_records(Message, Qname, Qtype, Zone, Records, {ClientIP, ServerIP}, CnameChain) ->
     resolve_records(Message, Qname, Qtype, Records, {ClientIP, ServerIP}, CnameChain, Zone).
 
 %% There were no exact matches on name, so move to the best-match resolution.
