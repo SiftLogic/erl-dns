@@ -313,8 +313,6 @@ query_master_for_records(MasterIP, ServerIP, QueryList) ->
 
 %% @doc This functin recieves a list of dns_rr records and does all the magic as far as geolocation.
 %% It will remove geolocation records, and match geolocation data with the record. It will remove duplicates
-%% @todo We need to make sure we are getting the most up to date records. At this point, this will
-%% @todo only happen if match_georecords returns no records. (refer to resolve module at call point)
 -spec match_georecords(inet:ip_address(),  dns:dname(), dns:type()) -> [dns:rr()].
 %% TEST FUNCTIONS ----------------------------------
 match_georecords({127,0,0,1}, _Qname, _Qtype) ->

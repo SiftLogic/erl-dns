@@ -66,12 +66,21 @@ resolve(Message, _AuthorityRecords, Qname, ?DNS_TYPE_AXFR = _Qtype, {ClientIP, S
 %% When public, erldns should only respond to AXFR. Order here is necessary.
 resolve(Message, AuthorityRecords, Qname, Qtype, {ClientIP, ServerIP}, Mode) when Mode =:= public ->
     Zone = erldns_zone_cache:find_zone(Qname, AuthorityRecords), % Zone lookup
-    Records = case erldns_zone_cache:match_georecords(ClientIP, Qname, Qtype) of
-        [] ->
-            get_matched_records(Message, Qname, Qtype, Zone, {ClientIP, ServerIP}, _CnameChain = []);
-        MatchedRecords ->
-            Message#dns_message{answers = MatchedRecords}
-    end,
+    %% @todo We need to make sure we are getting the most up to date records. At this point, this will
+    %% @todo only happen if match_georecords returns no records.
+    Records = case erldns_config:supports_geo() of
+                  true ->
+                      case erldns_zone_cache:match_georecords(ClientIP, Qname, Qtype) of
+                          [] ->
+                              get_matched_records(Message, Qname, Qtype, Zone, {ClientIP, ServerIP},
+                                                  _CnameChain = []);
+                          MatchedRecords ->
+                              Message#dns_message{answers = MatchedRecords}
+                      end;
+                  false ->
+                      get_matched_records(Message, Qname, Qtype, Zone, {ClientIP, ServerIP},
+                                          _CnameChain = [])
+              end,
     additional_processing(rewrite_soa_ttl(Records), ClientIP, Zone);
 resolve(Message, _AuthorityRecords, _Qname, _Qtype, _IP, Mode) when Mode =:= hidden ->
     Message.
@@ -316,7 +325,7 @@ restart_delegated_query(Message, Name, Qtype, {ClientIP, ServerIP}, CnameChain, 
 %% Delegated to a different zone.
 restart_delegated_query(Message, Name, Qtype, {ClientIP, ServerIP}, CnameChain, Zone, false) ->
     get_matched_records(Message, Name, Qtype, erldns_zone_cache:find_zone(Name, Zone#zone.authority),
-            {ClientIP, ServerIP}, CnameChain). % Zone lookup
+                        {ClientIP, ServerIP}, CnameChain). % Zone lookup
 
 
 
