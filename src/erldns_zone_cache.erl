@@ -40,7 +40,7 @@
          in_zone/1,
          zone_names/0,
          zone_names_and_versions/0,
-         retrieve_records/2,
+         update_records/2,
          match_georecords/3,
          get_zone_allow_notify/1,
          get_zone_allow_transfer/1,
@@ -265,41 +265,45 @@ get_records_by_name(Name) ->
 %% @doc This fuction retrieves the most up to date records from master if needed. Otherswise,
 %% it returns what was given to it.
 %% @end
--spec retrieve_records(inet:ip_address(), dns:dname()) -> [] | [dns:rr()].
-retrieve_records(ServerIP, Qname) ->
+-spec update_records(inet:ip_address(), dns:dname()) -> ok.
+update_records(ServerIP, Qname) ->
     Name = normalize_name(Qname),
-    Records = case ServerIP =:= get_zone_notify_source(Name) of
-                  true ->
-                      %% We are master, just return the records you have
-                      get_records_by_name(Name);
-                  false ->
-                      %% We are slave, get the zone in the cache and the records from the dict with expirys.
-                      case find_zone_in_cache(Name) of
-                          {ok, Zone} ->
-                              case dict:find(Name, Zone#zone.records_by_name) of
-                                  {ok, RecordSet} ->
-                                      retrieve_records(Name, Zone#zone.notify_source, ServerIP, RecordSet, [], []);
-                                  _ -> []
-                              end;
-                          _ ->
-                              []
-                      end
-              end,
-    Records.
+    case get_zone_notify_source(Name) of
+        {error, _} ->
+            ok;
+        NotifySource ->
+            case ServerIP =:= NotifySource of
+                true ->
+                    ok;
+                false ->
+                    %% We are slave, get the zone in the cache and the records from the dict with expirys.
+                    case find_zone_in_cache(Name) of
+                        {ok, Zone} ->
+                            case dict:find(Name, Zone#zone.records_by_name) of
+                                {ok, RecordSet} ->
+                                    update_records(Name, Zone#zone.notify_source, ServerIP, RecordSet, []),
+                            ok;
+                                _ -> ok
+                            end;
+                        _ ->
+                            ok
+                    end
+            end
+    end.
 
-retrieve_records(ZoneName, MasterIP, ServerIP, [], Acc, QueryAcc) ->
+update_records(ZoneName, MasterIP, ServerIP, [], QueryAcc) ->
     %%Query server for records that needed to be updated, and merge them with records that didn't.
     NewRecords = query_master_for_records(MasterIP, ServerIP, QueryAcc),
     [delete_record(ZoneName, OldRecord, false) || OldRecord <- QueryAcc],
-    [add_record(ZoneName, R, false) || R <- NewRecords],
-    lists:flatten(NewRecords, Acc);
-retrieve_records(ZoneName, MasterIP, ServerIP, [{Expiry, Record} | Tail], Acc, QueryAcc) ->
+    [add_record(ZoneName, R, false) || R <- NewRecords];
+%%     lists:flatten(NewRecords, Acc);
+update_records(ZoneName, MasterIP, ServerIP, [{Expiry, Record} | Tail], QueryAcc) ->
     %% Get the timestamp of the record
     case timestamp() < Expiry of
         true ->
-            retrieve_records(ZoneName, MasterIP, ServerIP, Tail, [Record | Acc], QueryAcc);
+            update_records(ZoneName, MasterIP, ServerIP, Tail, QueryAcc);
         false ->
-            retrieve_records(ZoneName, MasterIP, ServerIP, Tail, Acc, [Record | QueryAcc])
+            update_records(ZoneName, MasterIP, ServerIP, Tail, [Record | QueryAcc])
     end.
 
 %% @doc This function takes a list of records, builds a query and sends it to master for updated
@@ -338,8 +342,12 @@ get_region(Continent, Country, SubRegion, Qname, Qtype) ->
 %% those of the same type and region in the name _geo.[REGION].example.com
 -spec filter_georecords(binary(), dns:dname(), dns:type()) -> [dns:rr()].
 filter_georecords(RegionName, QName, QType) ->
-    {ok, Zone} = get_zone_with_records(QName),
-    filter_georecords(RegionName, QName, QType, Zone#zone.records, []).
+    case get_zone_with_records(QName) of
+        {ok, Zone} ->
+            filter_georecords(RegionName, QName, QType, Zone#zone.records, []);
+        _ ->
+            []
+    end.
 
 filter_georecords(_RegionName, _QName, _QType,  [], Acc) ->
     Acc;
