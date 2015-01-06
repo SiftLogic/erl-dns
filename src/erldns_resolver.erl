@@ -66,7 +66,7 @@ resolve(Message, _AuthorityRecords, Qname, ?DNS_TYPE_AXFR = _Qtype, {ClientIP, S
 %% When public, erldns should only respond to AXFR. Order here is necessary.
 resolve(Message, AuthorityRecords, Qname, Qtype, {ClientIP, ServerIP}, Mode) when Mode =:= public ->
     Zone = erldns_zone_cache:find_zone(Qname, AuthorityRecords), % Zone lookup
-    Records = case erldns_zone_cache:match_georecords({ClientIP, ServerIP}, Qname, Qtype) of
+    Records = case erldns_zone_cache:match_georecords(ClientIP, Qname, Qtype) of
         [] ->
             get_matched_records(Message, Qname, Qtype, Zone, {ClientIP, ServerIP}, _CnameChain = []);
         MatchedRecords ->
