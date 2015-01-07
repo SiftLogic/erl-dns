@@ -18,7 +18,8 @@
 
 -include("erldns.hrl").
 %% API
--export([start/0]).
+-export([start/0,
+         load_defaults/0]).
 
 -export([create_geogroup/3,
          delete_geogroup/1,
@@ -36,6 +37,12 @@ start() ->
             create_lookup_table()
     end,
     ok.
+
+load_defaults() ->
+    erldns_storage:empty_table(geolocation),
+    erldns_storage:empty_table(lookup_table),
+    generate_default_db(),
+    create_lookup_table().
 
 generate_default_db() ->
     create_geogroup(<<"us-west">>, <<"US">>, [
