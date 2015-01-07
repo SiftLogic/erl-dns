@@ -563,7 +563,6 @@ init([]) ->
 handle_call({put, Name, Zone}, _From, State) ->
     erldns_storage:insert(zones, {normalize_name(Name), Zone}),
     {reply, ok, State};
-
 handle_call({put, Name, Sha, Records, AllowNotifyList, AllowTransferList, AllowUpdateList, AlsoNotifyList,
              NotifySourceIP}, _From, State) ->
     erldns_storage:insert(zones,
@@ -575,7 +574,6 @@ handle_call({put, Name, Sha, Records, AllowNotifyList, AllowTransferList, AllowU
 handle_cast({put, Name, Zone}, State) ->
     erldns_storage:insert(zones, {normalize_name(Name), Zone}),
     {noreply, State};
-
 handle_cast({put, Name, Sha, Records, AllowNotifyList, AllowTransferList, AllowUpdateList, AlsoNotifyList,
              NotifySourceIP}, State) ->
     erldns_storage:insert(zones,
@@ -583,11 +581,9 @@ handle_cast({put, Name, Sha, Records, AllowNotifyList, AllowTransferList, AllowU
                                                             AllowUpdateList, AlsoNotifyList,
                                                             NotifySourceIP, Sha, Records)}),
     {noreply, State};
-
 handle_cast({delete, Name}, State) ->
     erldns_storage:delete(zones, normalize_name(Name)),
     {noreply, State};
-
 handle_cast(Message, State) ->
     erldns_log:debug("Received unsupported message: ~p", [Message]),
     {noreply, State}.
