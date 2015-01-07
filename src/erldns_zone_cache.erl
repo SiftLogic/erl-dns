@@ -328,13 +328,18 @@ query_master_for_records(MasterIP, ServerIP, QueryList) ->
 -spec match_georecords(inet:ip_address(),  dns:dname(), dns:type()) -> [dns:rr()].
 %% TEST FUNCTIONS ----------------------------------
 match_georecords({127,0,0,1}, Qname, Qtype) ->
-     get_region(<<"NA">>, <<"US">>, <<"FL">>, Qname, Qtype);
+    get_region(<<"NA">>, <<"US">>, <<"FL">>, Qname, Qtype);
 match_georecords({10,1,10,51}, Qname, Qtype) ->
     get_region(<<"NA">>, <<"US">>, <<"FL">>, Qname, Qtype);
 %% TEST FUNCTIONS ----------------------------------
 match_georecords(ClientIP, Qname, Qtype) ->
     {ok, #geoip{country_code = Country, region = SubRegion}} = egeoip:lookup(ClientIP),
-    get_region(proplists:get_value(Country, ?COUNTRY_CODES), Country, SubRegion, Qname, Qtype).
+    case proplists:get_value(Country, ?COUNTRY_CODES) of
+        <<"EU">> ->
+            get_region(<<"EU">>, <<"EU">>, <<"EU">>, Qname, Qtype);
+        Continent ->
+            get_region(Continent, Country, SubRegion, Qname, Qtype)
+    end.
 
 %% @doc This function takes arguements to get the region from the lookup table
 -spec get_region(binary(), binary(), binary(), dns:dname(), dns:type()) -> [binary()].

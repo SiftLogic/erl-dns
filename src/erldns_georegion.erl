@@ -38,19 +38,31 @@ start() ->
     ok.
 
 generate_default_db() ->
-    create_geogroup(<<"us-pacific">>, <<"US">>, [
+    create_geogroup(<<"us-west">>, <<"US">>, [
+                                              <<"WA">>, <<"OR">>, <<"CA">>, <<"AK">>, <<"HI">>,
+                                              <<"ID">>, <<"NV">>, <<"MT">>, <<"WY">>, <<"CO">>,
+                                              <<"NM">>, <<"UT">>, <<"AZ">>
 
-    ]),
-    create_geogroup(<<"us-mountain">>, <<"US">>, [
-
-    ]),
+                                             ]),
     create_geogroup(<<"us-central">>, <<"US">>, [
+                                                 <<"ND">>, <<"SD">>, <<"NE">>, <<"KS">>, <<"OK">>,
+                                                 <<"TX">>, <<"MN">>, <<"IA">>, <<"MO">>, <<"AR">>,
+                                                 <<"LA">>, <<"MI">>, <<"WI">>, <<"IL">>, <<"KY">>,
+                                                 <<"TN">>, <<"MS">>, <<"IN">>, <<"OH">>
 
-    ]),
+                                                ]),
     create_geogroup(<<"us-east">>, <<"US">>, [
+                                              <<"AL">>, <<"FL">>, <<"GA">>, <<"SC">>, <<"NC">>,
+                                              <<"VA">>,<<"WV">>, <<"MD">>, <<"DE">>, <<"NJ">>,
+                                              <<"PA">>, <<"NY">>, <<"CT">>, <<"RI">>, <<"MA">>,
+                                              <<"NH">>, <<"ME">>, <<"VT">>
 
-    ]),
-    ok.
+                                             ]),
+    create_geogroup(<<"canada">>, <<"CA">>, [
+                                             <<"AB">>, <<"BC">>, <<"MB">>, <<"NB">>, <<"NL">>,
+                                             <<"NT">>, <<"NS">>, <<"NU">>, <<"ON">>, <<"PE">>,
+                                             <<"QC">>, <<"SK">>, <<"YT">>, <<>>]),
+    create_geogroup(<<"europe">>, <<"EU">>, [<<"EU">>]).
 
 %% Geo-location API
 %% @doc Adds a new geogroup to the DB.
