@@ -67,6 +67,8 @@ start_phase(post_start, _StartType, _PhaseArgs) ->
             gen_server:cast(erldns_manager,
                             {send_zone_name_request, {<<"slave_startup_", MountedIPBin/binary>>, {Addr, Port}, MountedIP}})
     end,
+    erldns_log:info("Generating default region db"),
+    erldns_georegion:start(),
     ok.
 
 stop(_State) ->
