@@ -30,6 +30,14 @@
                 }
             },
             {
+                "name": "_geo.us-east.example.com",
+                "type": "AAAA",
+                "ttl": 3600,
+                "data": {
+                    "ip": "2001:6A8:0:1:210:4BFF:FE4B:4C61"
+                }
+            },
+            {
                 "name": "example.com",
                 "type": "A",
                 "ttl": 3600,

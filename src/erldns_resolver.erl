@@ -65,34 +65,8 @@ resolve(Message, _AuthorityRecords, Qname, ?DNS_TYPE_AXFR = _Qtype, {ClientIP, S
     end;
 %% When public, erldns should only respond to AXFR. Order here is necessary.
 resolve(Message, AuthorityRecords, Qname, Qtype, {ClientIP, ServerIP}, Mode) when Mode =:= public ->
-    {AnswerToQuery, Zone} = case erldns_zone_cache:find_zone(Qname, AuthorityRecords) of
-                                {error, not_authoratative} = Error ->
-                                    case erldns_config:use_root_hints() of
-                                        true ->
-                                            {Authority, Additional} = erldns_records:root_hints(),
-                                            {Message#dns_message{aa = true, rc = ?DNS_RCODE_NOERROR, authority = Authority,
-                                                                 additional = Additional}, Error};
-                                        _ ->
-                                            {Message#dns_message{aa = true, rc = ?DNS_RCODE_NOERROR}, Error}
-                                    end;
-                                {error, _Reason} = Error ->
-                                    {Message, Error};
-                                Zone0 ->
-                                    erldns_zone_cache:update_records(ServerIP, Zone0#zone.name),
-                                    case erldns_config:supports_geo() of
-                                        true ->
-                                            case erldns_zone_cache:match_georecords(ClientIP, Qname, Qtype) of
-                                                [] ->
-                                                    {get_matched_records(Message, Zone0#zone.name, Qtype, Zone0, erldns_zone_cache:get_records_by_name(Qname),
-                                                                         {ClientIP, ServerIP}, _CnameChain = []), Zone0};
-                                                MatchedRecords ->
-                                                    {Message#dns_message{answers = MatchedRecords}, Zone0}
-                                            end;
-                                        false ->
-                                            {get_matched_records(Message, Zone0#zone.name, Qtype, Zone0, erldns_zone_cache:get_records_by_name(Qname),
-                                                                 {ClientIP, ServerIP}, _CnameChain = []), Zone0}
-                                    end
-                            end,
+    Zone = erldns_zone_cache:find_zone(Qname, AuthorityRecords), % Zone lookup
+    AnswerToQuery = get_matched_records(Message, Qname, Qtype, Zone, {ClientIP, ServerIP}, _CnameChain = []),
     additional_processing(rewrite_soa_ttl(AnswerToQuery), ClientIP, Zone);
 resolve(Message, _AuthorityRecords, _Qname, _Qtype, _IP, Mode) when Mode =:= hidden ->
     Message.
@@ -100,9 +74,7 @@ resolve(Message, _AuthorityRecords, _Qname, _Qtype, _IP, Mode) when Mode =:= hid
 %% An SOA was found, thus we are authoritative and have the zone, and we are 'public'.
 %% Step 3: Match records
 get_matched_records(Message, Qname, Qtype, Zone, {ClientIP, ServerIP}, CnameChain) ->
-    resolve_records(Message, Qname, Qtype, erldns_zone_cache:get_records_by_name(Qname), {ClientIP, ServerIP}, CnameChain, Zone).
-get_matched_records(Message, Qname, Qtype, Zone, Records, {ClientIP, ServerIP}, CnameChain) ->
-    resolve_records(Message, Qname, Qtype, Records, {ClientIP, ServerIP}, CnameChain, Zone).
+    resolve_records(Message, Qname, Qtype, erldns_zone_cache:get_records_by_name(Qname, Qtype, ClientIP), {ClientIP, ServerIP}, CnameChain, Zone).
 
 %% There were no exact matches on name, so move to the best-match resolution.
 resolve_records(Message, Qname, Qtype, _MatchedRecords = [], {ClientIP, ServerIP}, CnameChain, Zone) ->

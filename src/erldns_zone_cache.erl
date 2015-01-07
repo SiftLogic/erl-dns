@@ -37,6 +37,7 @@
          get_authority/1,
          get_delegations/1,
          get_records_by_name/1,
+         get_records_by_name/3,
          in_zone/1,
          zone_names/0,
          zone_names_and_versions/0,
@@ -262,9 +263,16 @@ get_records_by_name(Name) ->
             []
     end.
 
-%% @doc This fuction retrieves the most up to date records from master if needed. Otherswise,
-%% it returns what was given to it.
-%% @end
+%% @doc This function takes the query type and client IP to match georecords.
+get_records_by_name(Name, Qtype, ClientIP) ->
+    case erldns_zone_cache:match_georecords(ClientIP, Name, Qtype) of
+        [] ->
+            get_records_by_name(Name);
+        MatchedRecords ->
+            MatchedRecords
+    end.
+
+%% @doc This function updates all records in the zone for the slave.
 -spec update_records(inet:ip_address(), dns:dname()) -> ok.
 update_records(ServerIP, Qname) ->
     Name = normalize_name(Qname),
@@ -282,7 +290,7 @@ update_records(ServerIP, Qname) ->
                             case dict:find(Name, Zone#zone.records_by_name) of
                                 {ok, RecordSet} ->
                                     update_records(Name, Zone#zone.notify_source, ServerIP, RecordSet, []),
-                            ok;
+                                    ok;
                                 _ -> ok
                             end;
                         _ ->
