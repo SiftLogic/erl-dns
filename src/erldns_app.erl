@@ -56,6 +56,7 @@ start_phase(post_start, _StartType, _PhaseArgs) ->
         undefined ->
             ok;
         {Addr, Port} ->
+            %% @todo This should be using the actual mounted IP. Change this for production
 %%             {ok, IFAddrs} = inet:getifaddrs(),
 %%             MountedIPAddresses = [begin
 %%                                       {addr, IfAddr} = lists:keyfind(addr, 1, List),
