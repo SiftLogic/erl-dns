@@ -234,12 +234,12 @@ query_tests(_Config) ->
               [A, B, C, D, E, F, G, H, I, J, K]).
 
 test_geolocation_api(_Config) ->
-    erldns_admin_server:create_geogroup(<<"US-EAST">>, <<"US">>, [<<"FL">>, <<"GA">>]),
+    erldns_georegion:create_geogroup(<<"US-EAST">>, <<"US">>, [<<"FL">>, <<"GA">>]),
     true = (length(ets:tab2list(lookup_table)) =:= 2),
-    erldns_admin_server:create_geogroup(<<"US-CENTRAL">>, <<"US">>, [<<"OK">>, <<"KS">>]),
+    erldns_georegion:create_geogroup(<<"US-CENTRAL">>, <<"US">>, [<<"OK">>, <<"KS">>]),
     true = (length(ets:tab2list(lookup_table)) =:= 4),
-    {error, duplicate_region} = erldns_admin_server:update_geogroup(<<"US-EAST">>, [<<"OK">>]),
-    erldns_admin_server:update_geogroup(<<"US-EAST">>, [<<"FL">>]),
+    {error, duplicate_region} = erldns_georegion:update_geogroup(<<"US-EAST">>, [<<"OK">>]),
+    erldns_georegion:update_geogroup(<<"US-EAST">>, [<<"FL">>]),
     true = (length(ets:tab2list(lookup_table)) =:= 3),
-    erldns_admin_server:delete_geogroup(<<"US-EAST">>),
+    erldns_georegion:delete_geogroup(<<"US-EAST">>),
     true = (length(ets:tab2list(lookup_table)) =:= 2).
