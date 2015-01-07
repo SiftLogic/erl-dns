@@ -265,7 +265,7 @@ get_records_by_name(Name) ->
 
 %% @doc This function takes the query type and client IP to match georecords.
 get_records_by_name(Name, Qtype, ClientIP) ->
-    case erldns_zone_cache:match_georecords(ClientIP, Name, Qtype) of
+    case match_georecords(ClientIP, Name, Qtype) of
         [] ->
             get_records_by_name(Name);
         MatchedRecords ->

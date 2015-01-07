@@ -21,16 +21,36 @@
 -export([start/0]).
 
 -export([create_geogroup/3,
-    delete_geogroup/1,
-    update_geogroup/2,
-    list_geogroups/0]).
+         delete_geogroup/1,
+         update_geogroup/2,
+         list_geogroups/0]).
+
+-export([create_lookup_table/0]).
 
 start() ->
-    ok = erldns_storage:create(geolocation),
-    create_lookup_table(),
+    case erldns_storage:create(geolocation) of
+        ok ->
+            generate_default_db(),
+            create_lookup_table();
+        exists ->
+            create_lookup_table()
+    end,
     ok.
 
+generate_default_db() ->
+    create_geogroup(<<"us-pacific">>, <<"US">>, [
 
+    ]),
+    create_geogroup(<<"us-mountain">>, <<"US">>, [
+
+    ]),
+    create_geogroup(<<"us-central">>, <<"US">>, [
+
+    ]),
+    create_geogroup(<<"us-east">>, <<"US">>, [
+
+    ]),
+    ok.
 
 %% Geo-location API
 %% @doc Adds a new geogroup to the DB.

@@ -98,7 +98,7 @@ create(geolocation) ->
         {aborted, {already_exists, geolocation}} ->
             erldns_log:warning("The geolocation table already exists on node ~p.~n",
                 [node()]),
-            ok;
+            exists;
         {atomic, ok} ->
             ok;
         Error ->
