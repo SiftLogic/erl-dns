@@ -327,8 +327,8 @@ query_master_for_records(MasterIP, ServerIP, QueryList) ->
 %% It will remove geolocation records, and match geolocation data with the record. It will remove duplicates
 -spec match_georecords(inet:ip_address(),  dns:dname(), dns:type()) -> [dns:rr()].
 %% TEST FUNCTIONS ----------------------------------
-match_georecords({127,0,0,1}, _Qname, _Qtype) ->
-    [];
+match_georecords({127,0,0,1}, Qname, Qtype) ->
+     get_region(<<"NA">>, <<"US">>, <<"FL">>, Qname, Qtype);
 match_georecords({10,1,10,51}, Qname, Qtype) ->
     get_region(<<"NA">>, <<"US">>, <<"FL">>, Qname, Qtype);
 %% TEST FUNCTIONS ----------------------------------

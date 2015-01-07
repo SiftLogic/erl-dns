@@ -44,13 +44,13 @@ create_geogroup(Name, Country, Regions) ->
     case erldns_storage:select(geolocation, Pattern, 0) of
         [] ->
             StoredRegions = lists:foldl(fun({{_Continent,_Country, Region}, _Name}, Acc) ->
-                [Region | Acc]
-            end, [], list_lookup_table()),
+                                                [Region | Acc]
+                                        end, [], list_lookup_table()),
             case no_duplicate_region(Regions, StoredRegions) of
                 true ->
                     NewGeo = #geolocation{name = NormalizedName,
-                        continent = proplists:get_value(Country, ?COUNTRY_CODES),
-                        country = Country, regions = Regions},
+                                          continent = proplists:get_value(Country, ?COUNTRY_CODES),
+                                          country = Country, regions = Regions},
                     erldns_storage:insert(geolocation, NewGeo),
                     add_to_lookup_table(NormalizedName, NewGeo#geolocation.continent, Country, Regions);
                 false ->
@@ -76,13 +76,13 @@ update_geogroup(Name, NewRegion) ->
     case erldns_storage:select(geolocation, NormalizedName) of
         [{_Name, #geolocation{continent = Continent, country = Country, regions = OldRegion} = Geo}] ->
             StoredRegions = lists:flatten(lists:foldl(fun({{_Continent,_Country, Region}, Name0}, Acc) ->
-                case Name0 =/= NormalizedName of
-                    true ->
-                        [Region | Acc];
-                    false ->
-                        Acc
-                end
-            end, [], list_lookup_table())),
+                                                              case Name0 =/= NormalizedName of
+                                                                  true ->
+                                                                      [Region | Acc];
+                                                                  false ->
+                                                                      Acc
+                                                              end
+                                                      end, [], list_lookup_table())),
             case no_duplicate_region(NewRegion, StoredRegions) of
                 true ->
                     erldns_storage:delete(geolocation, NormalizedName),
@@ -130,7 +130,7 @@ create_lookup_table() ->
     ok = erldns_storage:create(lookup_table),
     Pattern = #geolocation{name = '_', continent = '_', country = '_', regions = '_'},
     [add_subregions(Geo#geolocation.continent, Geo#geolocation.country, Geo#geolocation.regions, Geo#geolocation.name)
-        || Geo <- erldns_storage:select(geolocation, Pattern, 0)].
+     || Geo <- erldns_storage:select(geolocation, Pattern, 0)].
 
 add_to_lookup_table(Name, Continent, Country, Regions) ->
     ok = erldns_storage:create(lookup_table),
