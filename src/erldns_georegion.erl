@@ -100,10 +100,13 @@ create_geogroup(Name, Country, Regions) ->
 -spec delete_geogroup(binary()) -> ok | {error, term()}.
 delete_geogroup(Name) ->
     NormalizedName = normalize_name(Name),
-    [{_Name, #geolocation{continent = Continent, country = Country, regions = OldRegion}}] =
-        erldns_storage:select(geolocation, NormalizedName),
-    erldns_storage:delete(geolocation, NormalizedName),
-    delete_from_lookup_table(Continent, Country, OldRegion).
+    case erldns_storage:select(geolocation, NormalizedName) of
+        [{_Name, #geolocation{continent = Continent, country = Country, regions = OldRegion}}] ->
+            erldns_storage:delete(geolocation, NormalizedName),
+            delete_from_lookup_table(Continent, Country, OldRegion);
+        _ ->
+            {error, doesnt_exist}
+    end.
 
 %% @doc Takes the name of the geogroup to be modified, and a new list of region(s) to add to it.
 -spec update_geogroup(binary(), list(binary())) -> ok | {error, term()}.
