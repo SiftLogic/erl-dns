@@ -347,7 +347,6 @@ supports_geo() ->
             false
     end.
 
-
 keyget(Key, Data) ->
     {Key, Value} = lists:keyfind(Key, 1, Data),
     Value.

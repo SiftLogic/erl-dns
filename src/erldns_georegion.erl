@@ -85,7 +85,7 @@ create_geogroup(Name, Country, Regions) ->
             case no_duplicate_region(Regions, StoredRegions) of
                 true ->
                     NewGeo = #geolocation{name = NormalizedName,
-                                          continent = proplists:get_value(Country, ?COUNTRY_CODES),
+                                          continent = erldns_config:keyget(Country, ?COUNTRY_CODES),
                                           country = Country, regions = Regions},
                     erldns_storage:insert(geolocation, NewGeo),
                     add_to_lookup_table(NormalizedName, NewGeo#geolocation.continent, Country, Regions);
@@ -134,6 +134,7 @@ update_geogroup(Name, NewRegion) ->
             {error, doesnt_exist}
     end.
 
+%% @doc Lists all entries in the geogroup DB.
 list_geogroups() ->
     Pattern = #geolocation{name = '_', continent = '_', country = '_', regions = '_'},
     erldns_storage:select(geolocation, Pattern, 0).
@@ -154,6 +155,7 @@ bin_to_lower(<<H, T/binary>>, Acc) when H >= $A, H =< $Z ->
     bin_to_lower(T, <<Acc/binary, H2>>);
 bin_to_lower(<<H, T/binary>>, Acc) ->
     bin_to_lower(T, <<Acc/binary, H>>).
+
 %% @doc Takes a list of regions and checks to see if there are any duplicates in the stored regions.
 -spec no_duplicate_region(list(binary()), list(binary())) -> true | false.
 no_duplicate_region(Regions, StoredRegions) ->
@@ -189,4 +191,5 @@ list_lookup_table() ->
     ets:tab2list(lookup_table).
 
 add_subregions(Continent, Country, Regions, Name) ->
+    ok = erldns_storage:create(lookup_table),
     [erldns_storage:insert(lookup_table, {{Continent, Country, SubRegion}, Name}) || SubRegion <- Regions].
