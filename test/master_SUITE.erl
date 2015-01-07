@@ -16,26 +16,20 @@
 
 %% API
 -export([all/0,
-    init_per_suite/1,
-    end_per_suite/1,
-    init_per_testcase/2]).
+         init_per_suite/1,
+         end_per_suite/1,
+         init_per_testcase/2]).
 
--export([test_zone_modify/1]).
+-export([test_zone_modify/1,
+         test_georecord_match/1]).
 
 -include("../include/erldns.hrl").
 -include("../deps/dns/include/dns.hrl").
 all() ->
-    [test_zone_modify].
+    [test_zone_modify, test_georecord_match].
 
 init_per_suite(Config) ->
     application:start(erldns_app),
-    Config.
-
-end_per_suite(Config) ->
-    application:stop(erldns_app),
-    Config.
-
-init_per_testcase(test_zone_modify, Config) ->
     ok = application:set_env(erldns, servers, [
         [{port, 8053},
             {listen, [{10,1,10,51}]},
@@ -45,10 +39,18 @@ init_per_testcase(test_zone_modify, Config) ->
             ]}]
     ]),
     application:set_env(erldns, storage, [{type, erldns_storage_mnesia}, {dir, "/opt/erl-dns/test/test_db1"}]),
+    application:set_env(erldns, admin, [{listen, {10, 1, 10, 51}}, {port, 9000}]),
+    Config.
+
+end_per_suite(Config) ->
+    application:stop(erldns_app),
+    Config.
+
+init_per_testcase(test_zone_modify, Config) ->
     ok = erldns_storage:create(schema),
     ok = erldns:start(),
     Config;
-init_per_testcase(query_tests, Config) ->
+init_per_testcase(test_georecord_match, Config) ->
     Config.
 
 
@@ -58,10 +60,24 @@ test_zone_modify(_Config) ->
     ok = erldns_storage:create(schema),
     ok = erldns_storage:create(zones),
     {ok, _} = erldns_storage:load_zones("/opt/erl-dns/priv/example.zone.json"),
-    [ok] = erldns_zone_cache:add_record(<<"example.com">>,
-        {dns_rr,<<"example.com">>,1,1,3600,{dns_rrdata_a,{7,7,7,7}}}, true),
-    [ok] = erldns_zone_cache:update_record(<<"example.com">>,
-        {dns_rr,<<"example.com">>,1,1,3600,{dns_rrdata_a,{7,7,7,7}}},
-        {dns_rr,<<"example.com">>,1,1,3600,{dns_rrdata_a,{77,77,77,77}}}, true),
-    [ok] = erldns_zone_cache:delete_record(<<"example.com">>,
-        {dns_rr,<<"example.com">>,1,1,3600,{dns_rrdata_a,{77,77,77,77}}}, true).
+    [ok,ok,ok] = erldns_zone_cache:add_record(<<"example.com">>,
+                                        {dns_rr,<<"example.com">>,1,1,3600,{dns_rrdata_a,{7,7,7,7}}}, true),
+    [ok,ok,ok] = erldns_zone_cache:update_record(<<"example.com">>,
+                                           {dns_rr,<<"example.com">>,1,1,3600,{dns_rrdata_a,{7,7,7,7}}},
+                                           {dns_rr,<<"example.com">>,1,1,3600,{dns_rrdata_a,{77,77,77,77}}}, true),
+    [ok,ok,ok] = erldns_zone_cache:delete_record(<<"example.com">>,
+                                           {dns_rr,<<"example.com">>,1,1,3600,{dns_rrdata_a,{77,77,77,77}}}, true).
+
+test_georecord_match(_Config) ->
+    erldns_storage:create(geolocation),
+    erldns_georegion:create_geogroup(<<"us-east">>, <<"US">>, [<<"FL">>]),
+    erldns_georegion:create_lookup_table(),
+    io:format("zone: ~p", [ets:tab2list(zones)]),
+    io:format("georegions: ~p", [erldns_georegion:list_geogroups()]),
+    io:format("lookup table: ~p", [ets:tab2list(lookup_table)]),
+    {ok, {dns_rec,
+          {dns_header,_,_,_,_,_,_,_,_,_},
+          _,
+          [{dns_rr,"_geo.us-east.example.com",_,_,_,_,_,_,_,_}],
+          [],   %%NS List (Should be empty)
+          []}} = inet_res:nnslookup("example.com", any, a, [{{10,1,10,51}, 8053}], 10000).
