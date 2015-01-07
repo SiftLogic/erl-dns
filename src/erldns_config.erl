@@ -55,7 +55,8 @@
          get_mode/0,
          get_crypto/0,
          is_test/0,
-         supports_geo/0]).
+         supports_geo/0,
+         keyget/2]).
 
 -define(DEFAULT_IPV4_ADDRESS, {127,0,0,1}).
 -define(DEFAULT_IPV6_ADDRESS, {0,0,0,0,0,0,0,1}).
