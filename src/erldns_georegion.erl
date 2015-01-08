@@ -23,8 +23,7 @@
 
 -export([create_geogroup/3,
          delete_geogroup/1,
-         update_geogroup/2,
-         list_geogroups/0]).
+         update_geogroup/2]).
 
 -export([create_lookup_table/0]).
 
@@ -76,12 +75,11 @@ generate_default_db() ->
 -spec create_geogroup(binary(), binary(), list(binary())) -> ok | {error, term()}.
 create_geogroup(Name, Country, Regions) ->
     NormalizedName = normalize_name(Name),
-    Pattern = #geolocation{name = NormalizedName, continent = '_', country = '_', regions = '_'},
-    case erldns_storage:select(geolocation, Pattern, 0) of
+    case lists:keyfind(NormalizedName, 2, erldns_storage:list_table(lookup_table)) of
         [] ->
             StoredRegions = lists:foldl(fun({{_Continent,_Country, Region}, _Name}, Acc) ->
                                                 [Region | Acc]
-                                        end, [], list_lookup_table()),
+                                        end, [], erldns_storage:list_table(lookup_table)),
             case no_duplicate_region(Regions, StoredRegions) of
                 true ->
                     NewGeo = #geolocation{name = NormalizedName,
@@ -121,7 +119,7 @@ update_geogroup(Name, NewRegion) ->
                                                                   false ->
                                                                       Acc
                                                               end
-                                                      end, [], list_lookup_table())),
+                                                      end, [], erldns_storage:list_table(lookup_table))),
             case no_duplicate_region(NewRegion, StoredRegions) of
                 true ->
                     erldns_storage:delete(geolocation, NormalizedName),
@@ -133,11 +131,6 @@ update_geogroup(Name, NewRegion) ->
         _ ->
             {error, doesnt_exist}
     end.
-
-%% @doc Lists all entries in the geogroup DB.
-list_geogroups() ->
-    Pattern = #geolocation{name = '_', continent = '_', country = '_', regions = '_'},
-    erldns_storage:select(geolocation, Pattern, 0).
 
 %% Private functions
 normalize_name(Name) when is_list(Name) -> bin_to_lower(list_to_binary(Name));
@@ -185,10 +178,6 @@ update_lookup_table(NormalizedName, NewRegion, {Continent, Country, OldRegion}) 
 delete_from_lookup_table(Continent, Country, Regions) ->
     ok = erldns_storage:create(lookup_table),
     [erldns_storage:delete(lookup_table, {Continent, Country, Region}) || Region <- Regions].
-
-list_lookup_table() ->
-    ok = erldns_storage:create(lookup_table),
-    ets:tab2list(lookup_table).
 
 add_subregions(Continent, Country, Regions, Name) ->
     ok = erldns_storage:create(lookup_table),

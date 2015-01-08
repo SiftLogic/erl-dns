@@ -25,7 +25,8 @@
          select/2,
          select/3,
          foldl/3,
-         empty_table/1]).
+         empty_table/1,
+         list_table/1]).
 
 -spec create(atom()) -> ok.
 %% @doc Create the schema for mnesia, get the configuration from the config. Function sends 'ok'
@@ -93,11 +94,11 @@ create(authorities) ->
 create(geolocation) ->
     ok = ensure_mnesia_started(),
     case mnesia:create_table(geolocation,
-        [{attributes, record_info(fields, geolocation)},
-            {disc_copies, [node()]}]) of
+                             [{attributes, record_info(fields, geolocation)},
+                              {disc_copies, [node()]}]) of
         {aborted, {already_exists, geolocation}} ->
             erldns_log:warning("The geolocation table already exists on node ~p.~n",
-                [node()]),
+                               [node()]),
             exists;
         {atomic, ok} ->
             ok;
@@ -224,6 +225,23 @@ empty_table(Table) ->
         {aborted, Reason} ->
             {error, Reason}
     end.
+
+%% @doc Lists the contents of the given table.
+-spec list_table(atom()) -> [] | term().
+list_table(zones) ->
+    Pattern = #zone{name ='_', allow_notify = '_', allow_transfer = '_', allow_update = '_',
+                    also_notify = '_', notify_source = '_', version = '_', authority = '_', record_count = '_',
+                    records = '_', records_by_name = '_', records_by_type = '_'},
+    mnesia:dirty_match_object(zones, Pattern);
+list_table(authorities) ->
+    Pattern = #authorities{owner_name = '_', ttl = '_', class = '_', name_server = '_', email_addr = '_',
+                           serial_num = '_', refresh = '_', retry = '_', expiry = '_', nxdomain = '_'},
+    select(authorities, Pattern, 0);
+list_table(geolocation) ->
+    Pattern =  #geolocation{name = '_', continent = '_', country = '_', regions = '_'},
+    select(geolocation, Pattern, 0);
+list_table(_Name) ->
+    {error, doesnt_exist}.
 
 %% Private
 %% @doc Checks if mnesia is started, if not if starts mnesia.

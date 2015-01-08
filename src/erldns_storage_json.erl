@@ -24,7 +24,8 @@
          select/2,
          select/3,
          foldl/3,
-         empty_table/1]).
+         empty_table/1,
+         list_table/1]).
 
 %% Public API
 %% @doc Create ets table wrapper. Use match cases for adding different options to the table.
@@ -161,3 +162,12 @@ foldl(Fun, Acc, Table) ->
 empty_table(Table) ->
     ets:delete_all_objects(Table),
     ok.
+
+%% @doc Lists the ets table
+-spec list_table(atom()) -> term | {error, term()}.
+list_table(TableName) ->
+    try ets:tab2list(TableName)
+    catch
+        error:R ->
+            {error, R}
+    end.

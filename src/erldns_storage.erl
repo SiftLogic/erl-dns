@@ -30,6 +30,7 @@
          select/3,
          foldl/3,
          empty_table/1,
+         list_table/1,
          load_zones/0,
          load_zones/1]).
 
@@ -144,6 +145,12 @@ foldl(Fun, Acc, Table) ->
 empty_table(Table) ->
     Module = mod(Table),
     Module:empty_table(Table).
+
+%% @doc List all elements in a table.
+-spec list_table(atom()) -> [] | term() | {error, term()}.
+list_table(TableName) ->
+    Module = mod(TableName),
+    Module:list_table(TableName).
 
 %% @doc Load zones from a file. The default file name is "zones.json".(copied from erldns_zone_loader.erl)
 -spec load_zones() -> {ok, integer()} | {err,  atom()}.
