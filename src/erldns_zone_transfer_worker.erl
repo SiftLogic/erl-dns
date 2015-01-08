@@ -225,11 +225,13 @@ send_startup_zone_request(#zone{name = ZoneName} = Zone, BindIP, MasterIP) ->
                  end,
     %% Get new records from answer, delete old zone and replace it with the new zone
     NewRecords0 = dns:decode_message(Recv),
-    NewRecords = NewRecords0#dns_message.answers,
-    %% AFXR requests always have the authority at the beginning and end of the answer section.
-    [_Authority | RestOfRecords] = NewRecords,
-    NewZone = erldns_zone_cache:build_zone(Zone#zone{records = RestOfRecords}),
-    erldns_zone_cache:put_zone(ZoneName, NewZone).
+    case NewRecords0#dns_message.answers of
+        [] ->
+            erldns_log:warning("Couldn't complete zone transfer for zone: ~p", [ZoneName]);
+        NewRecords ->
+            NewZone = erldns_zone_cache:build_zone(Zone#zone{records = NewRecords}),
+            erldns_zone_cache:put_zone(ZoneName, NewZone)
+    end.
 
 %%%===================================================================
 %%% Utility functions

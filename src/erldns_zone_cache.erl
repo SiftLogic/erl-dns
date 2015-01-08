@@ -300,11 +300,10 @@ update_records(ServerIP, Qname) ->
     end.
 
 update_records(ZoneName, MasterIP, ServerIP, [], QueryAcc) ->
-    %%Query server for records that needed to be updated, and merge them with records that didn't.
+    %% Query server for records that needed to be updated, and merge them with records that didn't.
     NewRecords = query_master_for_records(MasterIP, ServerIP, QueryAcc),
     [delete_record(ZoneName, OldRecord, false) || OldRecord <- QueryAcc],
     [add_record(ZoneName, R, false) || R <- NewRecords];
-%%     lists:flatten(NewRecords, Acc);
 update_records(ZoneName, MasterIP, ServerIP, [{Expiry, Record} | Tail], QueryAcc) ->
     %% Get the timestamp of the record
     case timestamp() < Expiry of
@@ -412,7 +411,7 @@ add_new_zone(ZoneName, #zone{} = Zone) ->
 %% @doc Put a name and its records into the cache, along with a SHA which can be
 %% used to determine if the zone requires updating.
 %%
-%% This function will build the necessary Zone record before interting.
+%% This function will build the necessary Zone record before inserting.
 -spec put_zone({binary(), binary(), [#dns_rr{}]}) -> ok | {error, Reason :: term()}.
 put_zone({Name, Sha, Records, AllowNotifyList, AllowTransferList, AllowUpdateList, AlsoNotifyList,
           NotifySourceIP}) ->
