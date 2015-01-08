@@ -76,7 +76,7 @@ generate_default_db() ->
 create_geogroup(Name, Country, Regions) ->
     NormalizedName = normalize_name(Name),
     case lists:keyfind(NormalizedName, 2, erldns_storage:list_table(lookup_table)) of
-        [] ->
+        false ->
             StoredRegions = lists:foldl(fun({{_Continent,_Country, Region}, _Name}, Acc) ->
                                                 [Region | Acc]
                                         end, [], erldns_storage:list_table(lookup_table)),
