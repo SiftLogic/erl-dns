@@ -30,8 +30,8 @@
 start() ->
     case erldns_storage:create(geolocation) of
         ok ->
-            generate_default_db(),
-            create_lookup_table();
+            ok = erldns_storage:create(lookup_table),
+            generate_default_db();
         exists ->
             create_lookup_table()
     end,
