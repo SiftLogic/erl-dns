@@ -162,9 +162,8 @@ no_duplicate_region(Regions, StoredRegions) ->
 %% Lookup table functions
 create_lookup_table() ->
     ok = erldns_storage:create(lookup_table),
-    Pattern = #geolocation{name = '_', continent = '_', country = '_', regions = '_'},
     [add_subregions(Geo#geolocation.continent, Geo#geolocation.country, Geo#geolocation.regions, Geo#geolocation.name)
-     || Geo <- erldns_storage:select(geolocation, Pattern, 0)].
+     || Geo <- erldns_storage:list_table(geolocation)].
 
 add_to_lookup_table(Name, Continent, Country, Regions) ->
     ok = erldns_storage:create(lookup_table),
