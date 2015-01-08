@@ -354,22 +354,46 @@ get_region(Continent, Country, SubRegion, Qname, Qtype) ->
 %% those of the same type and region in the name _geo.[REGION].example.com
 -spec filter_georecords(binary(), dns:dname(), dns:type()) -> [dns:rr()].
 filter_georecords(RegionName, QName, QType) ->
+    erldns_log:info("QNAME: ~p", [QName]),
     case get_zone_with_records(QName) of
         {ok, Zone} ->
             filter_georecords(RegionName, QName, QType, Zone#zone.records, []);
         _ ->
-            []
+            [_ | Rest] = dns:dname_to_labels(QName),
+            WildcardName = <<"_geo.", RegionName/binary, ".", (dns:labels_to_dname([<<"*">>] ++ Rest))/binary>>,
+            filter_record_set(erldns_zone_cache:get_records_by_name(WildcardName))
     end.
 
 filter_georecords(_RegionName, _QName, _QType,  [], Acc) ->
     Acc;
-filter_georecords(RegionName, QName, QType, [H | T], Acc) ->
+filter_georecords(RegionName, QName, QType, [DNSRR | T], Acc) ->
     RegionSize = byte_size(RegionName),
-    case H of
+    erldns_log:info("QNAME: ~p", [QName]),
+    case DNSRR of
         #dns_rr{name = <<"_geo.", RegionName:RegionSize/binary, ".", QName/binary>>, type = QType} ->
-            filter_georecords(RegionName, QName, QType, T, [H | Acc]);
+            filter_georecords(RegionName, QName, QType, T, [DNSRR#dns_rr{name = QName} | Acc]);
+        #dns_rr{name = <<"_geo.", RegionName:RegionSize/binary, ".*.", QName/binary>>, type = QType} ->
+            filter_georecords(RegionName, QName, QType, T, [DNSRR#dns_rr{name = QName} | Acc]);
         _ ->
             filter_georecords(RegionName, QName, QType, T, Acc)
+    end.
+
+filter_record_set(Records) ->
+    filter_record_set(Records,[]).
+
+filter_record_set([], Acc) ->
+    Acc;
+filter_record_set([DNSRR | T], Acc) ->
+    case DNSRR of
+        #dns_rr{name = <<"_geo.", _/binary>>} ->
+            Parts = tl(tl(dns:dname_to_labels(DNSRR#dns_rr.name))),
+            QName = case hd(Parts) =:= <<"*">> of
+                        true -> tl(Parts);
+                        false -> Parts
+                    end,
+            filter_record_set(T, [DNSRR#dns_rr{name = dns:labels_to_dname(QName)} | Acc]);
+        _ ->
+            filter_record_set(T, Acc)
     end.
 
 %% @doc Check if the name is in a zone.
