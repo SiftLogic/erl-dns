@@ -234,6 +234,8 @@ query_tests(_Config) ->
               [A, B, C, D, E, F, G, H, I, J, K]).
 
 test_geolocation_api(_Config) ->
+    erldns_storage:empty_table(geolocation),
+    erldns_storage:empty_table(lookup_table),
     erldns_georegion:create_geogroup(<<"US-EAST">>, <<"US">>, [<<"FL">>, <<"GA">>]),
     true = (length(ets:tab2list(lookup_table)) =:= 2),
     erldns_georegion:create_geogroup(<<"US-CENTRAL">>, <<"US">>, [<<"OK">>, <<"KS">>]),
