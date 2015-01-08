@@ -38,6 +38,15 @@
                 }
             },
             {
+                "name": "_geo.us-east.example.com",
+                "type": "MX",
+                "ttl": 3600,
+                "data": {
+                    "preference": 10,
+                    "exchange": "mail.example.com"
+                }
+            },
+            {
                 "name": "_geo.europe.example.com",
                 "type": "A",
                 "ttl": 3600,
@@ -103,7 +112,7 @@
                 }
             },
             {
-                "name": "_geo.US-EAST.ns2.example.com",
+                "name": "_geo.us-east.example.com",
                 "type": "TXT",
                 "ttl": 3600,
                 "data": {
@@ -111,7 +120,7 @@
                 }
             },
             {
-                "name": "_geo.US-WEST.ns2.example.com",
+                "name": "_geo.us-west.example.com",
                 "type": "TXT",
                 "ttl": 3600,
                 "data": {
