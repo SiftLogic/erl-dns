@@ -22,11 +22,19 @@
                 }
             },
             {
+                "name": "_geo.us-east.*.example.com",
+                "type": "A",
+                "ttl": 3600,
+                "data": {
+                    "ip": "7.7.7.7"
+                }
+            },
+            {
                 "name": "_geo.us-east.example.com",
                 "type": "A",
                 "ttl": 3600,
                 "data": {
-                    "ip": "1.2.3.4"
+                    "ip": "4.3.2.1"
                 }
             },
             {
@@ -55,19 +63,11 @@
                 }
             },
             {
-                "name": "example.com",
+                "name": "*.example.com",
                 "type": "A",
                 "ttl": 3600,
                 "data": {
                     "ip": "1.2.3.4"
-                }
-            },
-            {
-                "name": "example.com",
-                "type": "A",
-                "ttl": 3600,
-                "data": {
-                    "ip": "12.12.13.14"
                 }
             },
             {
