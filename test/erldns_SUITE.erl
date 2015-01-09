@@ -184,7 +184,7 @@ test_zone_modify(_Config) ->
 increment_soa(_Config) ->
     {ok, #zone{authority = [#dns_rr{data = #dns_rrdata_soa{serial = OldSerial}}]} = OldZone}
         = erldns_zone_cache:get_zone_with_records(<<"example.com">>),
-    erldns_zone_cache:increment_soa(<<"example.com">>),
+    erldns_zone_cache:increment_serial(<<"example.com">>),
     {ok, #zone{authority = [#dns_rr{data = #dns_rrdata_soa{serial = NewSerial}}]} = NewZone}
         = erldns_zone_cache:get_zone_with_records(<<"example.com">>),
     case NewSerial =:= (OldSerial + 1) of

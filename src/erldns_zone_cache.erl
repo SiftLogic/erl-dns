@@ -65,7 +65,7 @@
          add_record/3,
          delete_record/3,
          update_record/4,
-         increment_soa/1
+         increment_serial/1
         ]).
 
 -export([get_ips_for_notify_set/1]).
@@ -472,7 +472,9 @@ put_zone_async(Name, #zone{records = Records, authority = [#dns_rr{name = AuthNa
                                                      authority = [Auth#dns_rr{name = normalize_name(AuthName)}],
                                                      records = normalize_records(Records)}}).
 
-increment_soa(ZoneName) ->
+%% @doc This function incriments the serial number of the SOA in the zone
+-spec increment_serial(binary()) -> [ok].
+increment_serial(ZoneName) ->
     {ok, #zone{records = Records, authority =
                    [#dns_rr{data = #dns_rrdata_soa{serial = Serial} = SOA}] = [Authority]} = Zone0}
         = get_zone_with_records(normalize_name(ZoneName)),
