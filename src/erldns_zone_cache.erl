@@ -505,68 +505,78 @@ delete_zone_permanently(Name0) ->
 %% @doc Add a record to a particular zone.
 -spec add_record(binary(), #dns_rr{}, boolean()) -> ok | {error, term()}.
 add_record(ZoneName, #dns_rr{} = Record, SendNotify) ->
-    {ok, #zone{allow_notify = AllowNotify, allow_transfer = AllowTransfer, allow_update = AllowUpdate,
-               also_notify = AlsoNotify, notify_source = NotifySource, version = Version, records = Records0,
-               authority = [#dns_rr{data = #dns_rrdata_soa{serial = Serial} = SOA0}] = [Authority]}}
-        = get_zone_with_records(normalize_name(ZoneName)),
-    %% Ensure no exact duplicates are found
-    [true = Record =/= X || X <- Records0],
-    %% Update serial number
-    NewAuth = Authority#dns_rr{data = SOA0#dns_rrdata_soa{serial = Serial + 1}},
-    Zone = build_zone(ZoneName, AllowNotify, AllowTransfer, AllowUpdate, AlsoNotify, NotifySource,
-                      Version, [NewAuth], remove_old_soa_add_new([Record | Records0], NewAuth)),
-    %% Put zone back into cache. And send notify if needed.
-    ok = delete_zone(ZoneName),
-    case SendNotify of
-        false ->
-            ok = put_zone(ZoneName, Zone);
-        true ->
-            ok = put_zone(ZoneName, Zone),
-            send_notify(ZoneName, Zone)
+    case get_zone_with_records(normalize_name(ZoneName)) of
+        {ok, #zone{allow_notify = AllowNotify, allow_transfer = AllowTransfer, allow_update = AllowUpdate,
+                   also_notify = AlsoNotify, notify_source = NotifySource, version = Version, records = Records0,
+                   authority = [#dns_rr{data = #dns_rrdata_soa{serial = Serial} = SOA0}] = [Authority]}} ->
+            %% Ensure no exact duplicates are found
+            [true = Record =/= X || X <- Records0],
+            %% Update serial number
+            NewAuth = Authority#dns_rr{data = SOA0#dns_rrdata_soa{serial = Serial + 1}},
+            Zone = build_zone(ZoneName, AllowNotify, AllowTransfer, AllowUpdate, AlsoNotify, NotifySource,
+                              Version, [NewAuth], remove_old_soa_add_new([Record | Records0], NewAuth)),
+            %% Put zone back into cache. And send notify if needed.
+            ok = delete_zone(ZoneName),
+            case SendNotify of
+                false ->
+                    ok = put_zone(ZoneName, Zone);
+                true ->
+                    ok = put_zone(ZoneName, Zone),
+                    send_notify(ZoneName, Zone)
+            end;
+        Error ->
+            Error
     end.
+
 
 %% @doc Delete a record from a particular zone.
 -spec delete_record(binary(), #dns_rr{}, boolean()) -> ok | {error, term()}.
 delete_record(ZoneName, #dns_rr{} = Record, SendNotify) ->
-    {ok, #zone{allow_notify = AllowNotify, allow_transfer = AllowTransfer, allow_update = AllowUpdate,
-               also_notify = AlsoNotify, notify_source = NotifySource, version = Version, records = Records0,
-               authority = [#dns_rr{data = #dns_rrdata_soa{serial = Serial} = SOA0}] = [Authority]}}
-        = get_zone_with_records(normalize_name(ZoneName)),
-    Records = lists:delete(Record, Records0),
-    %% Update serial number
-    NewAuth = Authority#dns_rr{data = SOA0#dns_rrdata_soa{serial = Serial + 1}},
-    Zone = build_zone(ZoneName, AllowNotify, AllowTransfer, AllowUpdate, AlsoNotify, NotifySource,
-                      Version, [NewAuth], remove_old_soa_add_new(Records, NewAuth)),
-    %% Put zone back into cache.
-    ok = delete_zone(ZoneName),
-    case SendNotify of
-        false ->
-            ok = put_zone(ZoneName, Zone);
-        true ->
-            ok = put_zone(ZoneName, Zone),
-            send_notify(ZoneName, Zone)
+    case get_zone_with_records(normalize_name(ZoneName)) of
+        {ok, #zone{allow_notify = AllowNotify, allow_transfer = AllowTransfer, allow_update = AllowUpdate,
+                   also_notify = AlsoNotify, notify_source = NotifySource, version = Version, records = Records0,
+                   authority = [#dns_rr{data = #dns_rrdata_soa{serial = Serial} = SOA0}] = [Authority]}} ->
+            Records = lists:delete(Record, Records0),
+            %% Update serial number
+            NewAuth = Authority#dns_rr{data = SOA0#dns_rrdata_soa{serial = Serial + 1}},
+            Zone = build_zone(ZoneName, AllowNotify, AllowTransfer, AllowUpdate, AlsoNotify, NotifySource,
+                              Version, [NewAuth], remove_old_soa_add_new(Records, NewAuth)),
+            %% Put zone back into cache.
+            ok = delete_zone(ZoneName),
+            case SendNotify of
+                false ->
+                    ok = put_zone(ZoneName, Zone);
+                true ->
+                    ok = put_zone(ZoneName, Zone),
+                    send_notify(ZoneName, Zone)
+            end;
+        Error ->
+            Error
     end.
 
 %% @doc Update a record in a zone.
 -spec update_record(binary(), #dns_rr{}, #dns_rr{}, boolean()) -> ok | {error, term()}.
 update_record(ZoneName, #dns_rr{} = OldRecord, #dns_rr{} = UpdatedRecord, SendNotify) ->
-    {ok, #zone{allow_notify = AllowNotify, allow_transfer = AllowTransfer, allow_update = AllowUpdate,
-               also_notify = AlsoNotify, notify_source = NotifySource, version = Version, records = Records0,
-               authority = [#dns_rr{data = #dns_rrdata_soa{serial = Serial} = SOA0}] = [Authority]}}
-        = get_zone_with_records(normalize_name(ZoneName)),
-    Records = [UpdatedRecord | lists:delete(OldRecord, Records0)],
-    %% Update serial number
-    NewAuth = Authority#dns_rr{data = SOA0#dns_rrdata_soa{serial = Serial + 1}},
-    Zone = build_zone(ZoneName, AllowNotify, AllowTransfer,AllowUpdate, AlsoNotify, NotifySource,
-                      Version, [NewAuth], remove_old_soa_add_new(Records, NewAuth)),
-    %% Put zone back into cache.
-    ok = delete_zone(ZoneName),
-    case SendNotify of
-        false ->
-            ok = put_zone(ZoneName, Zone);
-        true ->
-            ok = put_zone(ZoneName, Zone),
-            send_notify(ZoneName, Zone)
+    case get_zone_with_records(normalize_name(ZoneName)) of
+        {ok, #zone{allow_notify = AllowNotify, allow_transfer = AllowTransfer, allow_update = AllowUpdate,
+                   also_notify = AlsoNotify, notify_source = NotifySource, version = Version, records = Records0,
+                   authority = [#dns_rr{data = #dns_rrdata_soa{serial = Serial} = SOA0}] = [Authority]}} ->
+            Records = [UpdatedRecord | lists:delete(OldRecord, Records0)],
+            %% Update serial number
+            NewAuth = Authority#dns_rr{data = SOA0#dns_rrdata_soa{serial = Serial + 1}},
+            Zone = build_zone(ZoneName, AllowNotify, AllowTransfer,AllowUpdate, AlsoNotify, NotifySource,
+                              Version, [NewAuth], remove_old_soa_add_new(Records, NewAuth)),
+            %% Put zone back into cache.
+            ok = delete_zone(ZoneName),
+            case SendNotify of
+                false ->
+                    ok = put_zone(ZoneName, Zone);
+                true ->
+                    ok = put_zone(ZoneName, Zone),
+                    send_notify(ZoneName, Zone)
+            end;
+        Error ->
+            Error
     end.
 
 %% -----------------------------------------------------------------------------------------------
