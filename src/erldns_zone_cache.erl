@@ -322,8 +322,10 @@ query_master_for_records(_MasterIP, _ServerIP, []) ->
 query_master_for_records(MasterIP, ServerIP, QueryList) ->
     erldns_zone_transfer_worker:query_for_records(MasterIP, ServerIP, QueryList).
 
-%% @doc This functin recieves a list of dns_rr records and does all the magic as far as geolocation.
-%% It will remove geolocation records, and match geolocation data with the record. It will remove duplicates
+%% @doc This function takes the incomming IP and the query name and type. It then
+%% uses the egeoip db to find IP information inorder to find the  region associated
+%% with that IP.
+%% @end
 -spec match_georecords(inet:ip_address(),  dns:dname(), dns:type()) -> [dns:rr()].
 %% TEST FUNCTIONS ----------------------------------
 match_georecords({127,0,0,1}, Qname, Qtype) ->
@@ -340,7 +342,7 @@ match_georecords(ClientIP, Qname, Qtype) ->
             get_region(Continent, Country, SubRegion, Qname, Qtype)
     end.
 
-%% @doc This function takes arguements to get the region from the lookup table
+%% @doc This function takes arguments to get the region from the lookup table
 -spec get_region(binary(), binary(), binary(), dns:dname(), dns:type()) -> [binary()].
 get_region(Continent, Country, SubRegion, Qname, Qtype) ->
     case erldns_storage:select(lookup_table, {Continent, Country, SubRegion}) of
@@ -351,15 +353,17 @@ get_region(Continent, Country, SubRegion, Qname, Qtype) ->
     end.
 
 %% @doc This function takes all the records in the zone, and filters out them by looking for
-%% those of the same type and region in the name _geo.[REGION].example.com
+%% those of the same type and region in the name _geo.[REGION].example.com. If none are found
+%% it trys to find georecords with a wildcard in the name.
+%% @end
 -spec filter_georecords(binary(), dns:dname(), dns:type()) -> [dns:rr()].
 filter_georecords(RegionName, QName, QType) ->
-    erldns_log:info("QNAME: ~p", [QName]),
     case get_zone_with_records(QName) of
         {ok, Zone} ->
             filter_georecords(RegionName, QName, QType, Zone#zone.records, []);
         _ ->
             [_ | Rest] = dns:dname_to_labels(QName),
+            %% Wildcard for geo records. ex) _geo.[REGION].*.example.com
             WildcardName = <<"_geo.", RegionName/binary, ".", (dns:labels_to_dname([<<"*">>] ++ Rest))/binary>>,
             filter_record_set(erldns_zone_cache:get_records_by_name(WildcardName))
     end.
@@ -368,7 +372,6 @@ filter_georecords(_RegionName, _QName, _QType,  [], Acc) ->
     Acc;
 filter_georecords(RegionName, QName, QType, [DNSRR | T], Acc) ->
     RegionSize = byte_size(RegionName),
-    erldns_log:info("QNAME: ~p", [QName]),
     case DNSRR of
         #dns_rr{name = <<"_geo.", RegionName:RegionSize/binary, ".", QName/binary>>, type = QType} ->
             filter_georecords(RegionName, QName, QType, T, [DNSRR#dns_rr{name = QName} | Acc]);
@@ -436,6 +439,7 @@ add_new_zone(ZoneName, #zone{} = Zone) ->
 %% used to determine if the zone requires updating.
 %%
 %% This function will build the necessary Zone record before inserting.
+%% @end
 -spec put_zone({binary(), binary(), [#dns_rr{}]}) -> ok | {error, Reason :: term()}.
 put_zone({Name, Sha, Records, AllowNotifyList, AllowTransferList, AllowUpdateList, AlsoNotifyList,
           NotifySourceIP}) ->
