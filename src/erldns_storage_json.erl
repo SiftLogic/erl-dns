@@ -164,7 +164,7 @@ empty_table(Table) ->
     ok.
 
 %% @doc Lists the ets table
--spec list_table(atom()) -> term | {error, term()}.
+-spec list_table(atom()) -> term() | {error, term()}.
 list_table(TableName) ->
     try ets:tab2list(TableName)
     catch
