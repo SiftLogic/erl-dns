@@ -152,25 +152,44 @@ no_duplicate_region(Regions, StoredRegions) ->
     end.
 
 %% Lookup table functions
+%% NOTE: These functions assume that the data contains no duplicates.
+
+%% @doc This function takes all entries in the geolocation DB and generates the lookup table.
+%% ex)
+%% [{{<<"NA">>,<<"CA">>,<<"NB">>},<<"canada">>},
+%%  {{<<"NA">>,<<"US">>,<<"RI">>},<<"us-east">>},
+%%  {{<<"NA">>,<<"US">>,<<"VT">>},<<"us-east">>},
+%%  {{<<"NA">>,<<"US">>,<<"NJ">>},<<"us-east">>},
+%%  ...]
+%% @end
+-spec create_lookup_table() -> [ok].
 create_lookup_table() ->
     ok = erldns_storage:create(lookup_table),
     erldns_storage:empty_table(lookup_table),
     [add_subregions(Geo#geolocation.continent, Geo#geolocation.country, Geo#geolocation.regions, Geo#geolocation.name)
      || Geo <- erldns_storage:list_table(geolocation)].
 
+%% @doc This function takes all elements necessary for an entry and adds it to the lookup table.
+-spec add_to_lookup_table(binary(), binary(), binary(), list(binary())) -> [ok].
 add_to_lookup_table(Name, Continent, Country, Regions) ->
     ok = erldns_storage:create(lookup_table),
     add_subregions(Continent, Country, Regions, Name).
 
-update_lookup_table(NormalizedName, NewRegion, {Continent, Country, OldRegion}) ->
+%% @doc This function deletes old regions from the lookup table and adds the new regions.
+-spec update_lookup_table(binary(), list(binary()), binary(), binary(), list(binary())) -> [ok].
+update_lookup_table(NormalizedName, NewRegion, Continent, Country, OldRegion) ->
     ok = erldns_storage:create(lookup_table),
     delete_from_lookup_table(Continent, Country, OldRegion),
     add_subregions(Continent, Country, NewRegion, NormalizedName).
 
+%% @doc This function deletes an entry(s) from the lookup table.
+-spec delete_from_lookup_table(binary(), binary(), list(binary())) -> [ok].
 delete_from_lookup_table(Continent, Country, Regions) ->
     ok = erldns_storage:create(lookup_table),
     [erldns_storage:delete(lookup_table, {Continent, Country, Region}) || Region <- Regions].
 
+%% @doc This function takes the list of regions, and creates the seperate entry for every subregion.
+-spec add_subregions(binary(), binary(), list(binary()), binary()) -> [ok].
 add_subregions(Continent, Country, Regions, Name) ->
     ok = erldns_storage:create(lookup_table),
     [erldns_storage:insert(lookup_table, {{Continent, Country, SubRegion}, Name}) || SubRegion <- Regions].
