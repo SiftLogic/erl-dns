@@ -87,7 +87,6 @@ handle_info({tcp, Socket, <<"delete_zone_", ZoneName/binary>>}, State) ->
     {ok, {SocketIP, _SocketPort}} = inet:peername(Socket),
     case SocketIP =:= erldns_config:get_master_ip() of
         true ->
-            gen_server:cast(erldns_manager, {delete_zone_from_orddict, ZoneName}),
             erldns_zone_cache:delete_zone(ZoneName);
         false ->
             erldns_log:warning("Possible intruder requested zone delete: ~p", [{SocketIP, _SocketPort}])

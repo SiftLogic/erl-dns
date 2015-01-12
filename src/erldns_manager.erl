@@ -56,16 +56,11 @@ init([]) ->
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.
 
-handle_cast({delete_zone_from_orddict, ZoneName}, #state{zone_expirations = Orddict} = State) ->
-    NewOrddict = delete_zone_from_orddict(ZoneName, Orddict),
-    {noreply, State#state{orddict_size = length(NewOrddict), zone_expirations = NewOrddict}, ?REFRESH_INTERVAL};
-handle_cast({add_zone_to_orddict, {#zone{name = ZoneName, authority = [#dns_rr{data = ZoneAuth}]}, BindIP}},
+handle_cast({add_zone_to_orddict, {Zone, BindIP}},
             #state{zone_expirations = Orddict} = State) ->
-    Expiration = ZoneAuth#dns_rrdata_soa.expire + timestamp(),
-    ArgsToSendAXFR = {ZoneName, BindIP},
-    NewOrddict = orddict:append(Expiration, ArgsToSendAXFR, Orddict),
-        {noreply, State#state{orddict_size = length(NewOrddict), zone_expirations = NewOrddict},
-         ?REFRESH_INTERVAL};
+    NewOrddict = add_zone_to_orddict(Zone, BindIP, Orddict),
+    {noreply, State#state{orddict_size = length(NewOrddict), zone_expirations = NewOrddict},
+     ?REFRESH_INTERVAL};
 handle_cast({send_notify, {_BindIP, _DestinationIP, _ZoneName, _ZoneClass} = Args}, State) ->
     Spec = ?TRANSFER_WORKER(send_notify, Args),
     supervisor:start_child(erldns_zone_transfer_sup, Spec),
@@ -90,30 +85,42 @@ handle_cast(_Request, State) ->
 %% timer with the same order, else it sends an axfr to the associated master, reorders the
 %% dict and restarts the timer.
 %% @end
-handle_info(timeout, #state{zone_expirations = Orddict, orddict_size = Size} = State) when Size > 0 ->
+handle_info(timeout, #state{zone_expirations = Orddict0, orddict_size = Size} = State) when Size > 0 ->
     Before = now(),
     Timestamp = timestamp(),
-    NewOrddict = case hd(orddict:to_list(Orddict)) of
+    NewOrddict = case hd(orddict:to_list(Orddict0)) of
                      {Expiration, ListOfExpiredZones} when Expiration < Timestamp ->
-                         [begin
-                              {ok, Zone} = erldns_zone_cache:get_zone(ZoneName),
-                              try erldns_zone_transfer_worker:send_axfr(ZoneName, BindIP, Zone#zone.notify_source) of
-                                  _Error -> erldns_log:warning("Recieved weird error: ~p", [_Error])
-                              catch
-                                  exit:normal -> ok;
-                                  error:Reason ->
-                                      erldns_log:warning("Could not refresh zone ~p, requested from ~p"
-                                                         " for reason ~p",
-                                                         [ZoneName, Zone#zone.notify_source, Reason])
-                              end
-                          end
-                          || {ZoneName, BindIP} <- ListOfExpiredZones],
+                         DeletedZoneNames = [begin
+                                                 case erldns_zone_cache:get_zone(ZoneName) of
+                                                     {ok, Zone} ->
+                                                         try erldns_zone_transfer_worker:send_axfr(ZoneName, BindIP, Zone#zone.notify_source) of
+                                                             _Error -> erldns_log:warning("Recieved weird error: ~p", [_Error]), ok
+                                                         catch
+                                                             exit:normal -> ok;
+                                                             error:Reason ->
+                                                                 erldns_log:warning("Could not refresh zone ~p, requested from ~p"
+                                                                                    " for reason ~p",
+                                                                                    [ZoneName, Zone#zone.notify_source, Reason]),
+                                                                 ok
+                                                         end;
+                                                     {error, {zone_not_found, ZoneName}} ->
+                                                         ZoneName
+                                                 end
+                                             end
+                                             || {ZoneName, BindIP} <- ListOfExpiredZones],
+                         Orddict = delete_zones_from_orddict(DeletedZoneNames, Orddict0),
                          create_new_zone_expiration_orddict(Expiration, Orddict, ListOfExpiredZones);
                      {Expiration, _ListOfExpiredZone} when Expiration >= Timestamp ->
-                         Orddict
+                         Orddict0
                  end,
     TimeSpentMs = timer:now_diff(now(), Before) div 1000,
     {noreply, State#state{zone_expirations = NewOrddict, orddict_size = orddict:size(NewOrddict)},
+     ?REFRESH_INTERVAL + TimeSpentMs};
+handle_info(timeout, #state{orddict_size = Size} = State) when Size =:= 0 ->
+    Before = now(),
+    Orddict = setup_zone_expiration_orddict(),
+    TimeSpentMs = timer:now_diff(now(), Before) div 1000,
+    {noreply, State#state{zone_expirations = Orddict, orddict_size = orddict:size(Orddict)},
      ?REFRESH_INTERVAL + TimeSpentMs};
 handle_info(timeout, State)  ->
     {noreply, State, ?REFRESH_INTERVAL};
@@ -170,6 +177,8 @@ setup_zone_expiration_orddict() ->
 -spec create_new_zone_expiration_orddict(integer(), orddict:orddict(),
                                          [{ZoneName :: binary(), BindIP :: inet:ip_address()}]) ->
                                                 orddict:orddict().
+create_new_zone_expiration_orddict(_ExpirationKey, [], _ListOfExpiredZones) ->
+    [];
 create_new_zone_expiration_orddict(ExpirationKey, Orddict, ListOfExpiredZones) ->
     Orddict0 = orddict:erase(ExpirationKey, Orddict),
     lists:flatten([orddict:append(get_expiration(ZoneName), Args, Orddict0)
@@ -182,10 +191,29 @@ get_expiration(ZoneName) ->
     [#dns_rr{data = #dns_rrdata_soa{expire = Expire}}] = Zone#zone.authority,
     Expire + timestamp().
 
+%% @doc This function takes a zone  and the orrdict to add entries in the zone expiration
+%% orddict.
+%% @end
+-spec add_zone_to_orddict(#zone{}, inet:ip_address(), orddict:orddict()) -> orddict:orddict().
+add_zone_to_orddict(#zone{name = ZoneName, authority = [#dns_rr{data = ZoneAuth}]}, BindIP, Orddict) ->
+    Expiration = ZoneAuth#dns_rrdata_soa.expire + timestamp(),
+    ArgsToSendAXFR = {ZoneName, BindIP},
+    orddict:append(Expiration, ArgsToSendAXFR, Orddict).
+
+%% @doc This function takes a list of zone names and deletes them from the orrdict.
+-spec delete_zones_from_orddict(list(term()), orddict:orddict()) -> orddict:orddict().
+delete_zones_from_orddict([], NewOrddict) ->
+    NewOrddict;
+delete_zones_from_orddict([DeletedZone | Tail], NewOrddict) ->
+    delete_zones_from_orddict(Tail, delete_zone_from_orddict(DeletedZone, NewOrddict)).
+
 %% @doc This function takes a zone name and the orrdict to delete entries in the zone expiration
 %% orddict.
 %% @end
 -spec delete_zone_from_orddict(binary(), orddict:orddict()) -> orddict:orddict().
+delete_zone_from_orddict(ok, Orddict) ->
+    %% This case was presented to take care of when no zones were deleted.
+    Orddict;
 delete_zone_from_orddict(ZoneName, Orddict) ->
     delete_zone_from_orddict(ZoneName, orddict:to_list(Orddict), []).
 
