@@ -19,13 +19,15 @@
                                      {size, 10}, {max_overflow, 20}
                                     ]}]
                     ]},
+          {primary_mounted_ip, {127,0,0,1}},  %%Names the primary mounted IP. Necessary so 'master'
+                                              %%gets correct message <<"slave_startup_", IP/binary>>
+          {admin, [{listen, {10, 1, 10, 51}}, {port, 9000}]},%% Admin server (used for master)
           {use_root_hints, false},
           {catch_exceptions, true},
           {zones, "priv/example.zone.json"},
           {metrics, [
                      {port, 8082}
                     ]},
-          {admin, [{listen, {10, 1, 10, 51}}, {port, 9000}]},%% Admin server (used for master)
           {lager, [
                    {handlers, [
                                {lager_console_backend, info},

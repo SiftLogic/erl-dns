@@ -54,6 +54,7 @@
          get_admin/0,
          get_mode/0,
          get_crypto/0,
+         get_primary_mounted_ip/0,
          is_test/0,
          supports_geo/0,
          keyget/2,
@@ -316,6 +317,14 @@ get_crypto() ->
             undefined;
         {ok, Crypto} ->
             {keyget(key, Crypto), keyget(vector, Crypto)}
+    end.
+
+get_primary_mounted_ip() ->
+    case application:get_env(erldns, primary_mounted_ip) of
+        undefined ->
+            {127, 0 ,0, 1};
+        {ok, IP} ->
+            IP
     end.
 
 get_mode() ->

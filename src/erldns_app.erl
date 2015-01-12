@@ -56,14 +56,7 @@ start_phase(post_start, _StartType, _PhaseArgs) ->
         undefined ->
             ok;
         {Addr, Port} ->
-            %% @todo This should be using the actual mounted IP. Change this for production
-%%             {ok, IFAddrs} = inet:getifaddrs(),
-%%             MountedIPAddresses = [begin
-%%                                       {addr, IfAddr} = lists:keyfind(addr, 1, List),
-%%                                       IfAddr
-%%                                   end || {_, List} <- IFAddrs],
-%%             MountedIP = hd(lists:sort([IP || IP <- MountedIPAddresses])),
-            MountedIP = {127, 0, 0 , 1},
+            MountedIP = erldns_config:get_primary_mounted_ip(),
             MountedIPBin = term_to_binary(MountedIP),
             gen_server:cast(erldns_manager,
                             {send_zone_name_request, {<<"slave_startup_", MountedIPBin/binary>>, {Addr, Port}, MountedIP}})
