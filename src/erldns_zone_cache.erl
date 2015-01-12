@@ -477,16 +477,19 @@ put_zone_async(Name, #zone{records = Records, authority = [#dns_rr{name = AuthNa
                                                      records = normalize_records(Records)}}).
 
 %% @doc This function incriments the serial number of the SOA in the zone
--spec increment_serial(binary()) -> [ok].
+-spec increment_serial(binary()) -> [ok] | {error, term()}.
 increment_serial(ZoneName) ->
-    {ok, #zone{records = Records, authority =
-                   [#dns_rr{data = #dns_rrdata_soa{serial = Serial} = SOA}] = [Authority]} = Zone0}
-        = get_zone_with_records(normalize_name(ZoneName)),
-    NewAuth = Authority#dns_rr{data = SOA#dns_rrdata_soa{serial = Serial + 1}},
-    Zone = build_zone(Zone0#zone{records = remove_old_soa_add_new(Records, NewAuth),
-                                 authority = [NewAuth]}),
-    ok = put_zone(ZoneName, Zone),
-    send_notify(ZoneName, Zone).
+    case get_zone_with_records(normalize_name(ZoneName)) of
+        {ok, #zone{records = Records, authority =
+                       [#dns_rr{data = #dns_rrdata_soa{serial = Serial} = SOA}] = [Authority]} = Zone0} ->
+            NewAuth = Authority#dns_rr{data = SOA#dns_rrdata_soa{serial = Serial + 1}},
+            Zone = build_zone(Zone0#zone{records = remove_old_soa_add_new(Records, NewAuth),
+                                         authority = [NewAuth]}),
+            ok = put_zone(ZoneName, Zone),
+            send_notify(ZoneName, Zone);
+        Error ->
+            Error
+    end.
 
 %% @doc Remove a zone from the cache.
 -spec delete_zone(binary()) -> ok | {error, term()}.
