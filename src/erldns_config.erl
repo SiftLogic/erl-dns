@@ -322,6 +322,7 @@ get_crypto() ->
 get_primary_mounted_ip() ->
     case application:get_env(erldns, primary_mounted_ip) of
         undefined ->
+            erldns_log:warning("No primary mounted IP configured."),
             {127, 0 ,0, 1};
         {ok, IP} ->
             IP
