@@ -83,46 +83,17 @@ handle_cast(_Request, State) ->
 handle_info(timeout, #state{zone_expirations = Orddict0, orddict_size = Size, zones_in_cache = OldZones} = State) when Size > 0 ->
     Before = now(),
     Timestamp = timestamp(),
-    NewOrddict0 = case hd(orddict:to_list(Orddict0)) of
-                     {Expiration, ListOfExpiredZones0} when Expiration < Timestamp ->
-                         DeletedZoneNames = [begin
-                                                 case erldns_zone_cache:get_zone(ZoneName) of
-                                                     {ok, Zone} ->
-                                                         try erldns_zone_transfer_worker:send_axfr(ZoneName, BindIP, Zone#zone.notify_source) of
-                                                             _Error -> erldns_log:warning("Recieved weird error: ~p", [_Error]), ok
-                                                         catch
-                                                             exit:normal -> ok;
-                                                             error:Reason ->
-                                                                 erldns_log:warning("Could not refresh zone ~p, requested from ~p"
-                                                                                    " for reason ~p",
-                                                                                    [ZoneName, Zone#zone.notify_source, Reason]),
-                                                                 ok
-                                                         end;
-                                                     {error, {zone_not_found, ZoneName}} ->
-                                                         ZoneName
-                                                 end
-                                             end
-                                             || {ZoneName, BindIP} <- ListOfExpiredZones0],
-                         erldns_log:info("deleted zones: ~p", [DeletedZoneNames]),
-                         Orddict = delete_zones_from_orddict(DeletedZoneNames, Orddict0),
-                         ListOfExpiredZones = lists:foldl(fun(DeletedZone, Acc) ->
-                             lists:keydelete(DeletedZone, 1, Acc)
-                             end, ListOfExpiredZones0, DeletedZoneNames),
-                         erldns_log:info("listofexpired before: ~p", [ListOfExpiredZones0]),
-                         erldns_log:info("listfoexpired after: ~p", [ListOfExpiredZones]),
-                         erldns_log:info("orddict after deleteing ~p: ~p", [DeletedZoneNames, Orddict]),
+    NewZones = erldns_zone_cache:zone_names(),
+    Orddict = check_for_new_zones(OldZones, erldns_config:get_primary_mounted_ip(), Orddict0, NewZones),
+    NewOrddict = case hd(orddict:to_list(Orddict)) of
+                     {Expiration, ListOfExpiredZones} when Expiration < Timestamp ->
                          create_new_zone_expiration_orddict(Expiration, Orddict, ListOfExpiredZones);
-                     {Expiration, _ListOfExpiredZone} when Expiration >= Timestamp ->
-                         Orddict0
+                     {Expiration, _ListOfExpiredZones} when Expiration >= Timestamp ->
+                         Orddict
                  end,
-    Zones = erldns_zone_cache:zone_names(),
-    {MountedIP, _Port} = erldns_config:get_admin(),
-    NewOrddict = check_for_new_zones(OldZones, MountedIP, NewOrddict0, Zones),
-    erldns_log:info("old orddict: ~p", [Orddict0]),
-    erldns_log:info("new orddict: ~p", [NewOrddict]),
     TimeSpentMs = timer:now_diff(now(), Before) div 1000,
     {noreply, State#state{zone_expirations = NewOrddict, orddict_size = orddict:size(NewOrddict),
-                          zones_in_cache = Zones},
+                          zones_in_cache = NewZones},
      ?REFRESH_INTERVAL + TimeSpentMs};
 handle_info(timeout, #state{orddict_size = Size} = State) when Size =:= 0 ->
     Before = now(),
@@ -156,36 +127,30 @@ check_for_new_zones(OldZones, BindIP, Orddict, [Zone | Tail]) ->
             check_for_new_zones(OldZones, BindIP, add_zone_to_orddict(Zone, BindIP, Orddict), Tail)
     end.
 
-%% @doc This function creates a orrdict for the zones the slave  has. This orddict serves as
+%% @doc This function creates a orrdict for the zones the slave has. This orddict serves as
 %% a data structure that stores expiration as a key with the list of arguments necessary to
 %% initiate a zone transfer (AXFR) for the expired zone(s).
 %% @end
 -spec setup_zone_expiration_orddict() -> orddict:orddict().
 setup_zone_expiration_orddict() ->
-    %% Get the bind IP we will use to send the AXFR
     ZoneNames = erldns_zone_cache:zone_names(),
     NewOrrdict = lists:foldl(
                    fun(ZoneName, Orrdict) ->
                            {ok, #zone{allow_transfer = AllowTransfer, notify_source = NotifySource,
                                       authority = [#dns_rr{data = ZoneAuth}]}}
-                               = erldns_zone_cache:get_zone_with_records(ZoneName),
-                           case AllowTransfer of
-                               [] ->
+                               = erldns_zone_cache:get_zone(ZoneName),
+                           MountedIP = erldns_config:get_primary_mounted_ip(),
+                           case MountedIP =:= NotifySource orelse AllowTransfer =:= [] of
+                               true ->
+                                   %% We are the zone Authority, or we do not have allow transfer
+                                   %% information. We don't need to keep track of this zone.
                                    Orrdict;
-                               _ ->
-                                   {MountedIP, _Port} = erldns_config:get_admin(),
-                                   case NotifySource =:= MountedIP of
-                                       true ->
-                                           %% We are the zone Authority, we don't need to keep
-                                           %% track of this zone.
-                                           Orrdict;
-                                       false ->
-                                           %% We are slave of a zone, we need to keep track of it
-                                           %% and send afxr when it expires
-                                           Expiration = ZoneAuth#dns_rrdata_soa.expire + timestamp(),
-                                           ArgsToSendAXFR = {ZoneName, MountedIP},
-                                           orddict:append(Expiration, ArgsToSendAXFR, Orrdict)
-                                   end
+                               false ->
+                                   %% We are slave of a zone, we need to keep track of it
+                                   %% and send afxr when it expires
+                                   %% append: {Expiration, [{ZoneName, MountedIP} | ...]}
+                                   orddict:append(ZoneAuth#dns_rrdata_soa.expire + timestamp(),
+                                                  {ZoneName, MountedIP}, Orrdict)
                            end
                    end,
                    orddict:new(),
@@ -198,21 +163,27 @@ setup_zone_expiration_orddict() ->
 -spec create_new_zone_expiration_orddict(integer(), orddict:orddict(),
                                          [{ZoneName :: binary(), BindIP :: inet:ip_address()}]) ->
                                                 orddict:orddict().
-create_new_zone_expiration_orddict(_ExpirationKey, [], _ListOfExpiredZones) ->
-    [];
-create_new_zone_expiration_orddict(_ExpirationKey, Orddict, []) ->
-    Orddict;
-create_new_zone_expiration_orddict(ExpirationKey, Orddict, ListOfExpiredZones) ->
-    Orddict0 = orddict:erase(ExpirationKey, Orddict),
-    lists:flatten([orddict:append(get_expiration(ZoneName), Args, Orddict0)
-                   || {ZoneName, _ServerIP} = Args <- ListOfExpiredZones]).
+create_new_zone_expiration_orddict(ExpirationKey, Orddict0, ListOfExpiredZones) ->
+    Orddict = orddict:erase(ExpirationKey, Orddict0),
+    lists:flatten([begin
+                       case get_expiration(ZoneName) of
+                           {error, _Reason} ->
+                               %%Zone must have been deleted. Dont append it.
+                               Orddict;
+                           Expiration ->
+                               orddict:append(Expiration, Args, Orddict)
+                       end
+                   end || {ZoneName, _BindIP} = Args <- ListOfExpiredZones]).
 
 %% @doc Gets the expiration of the given zone name
 -spec get_expiration(binary()) -> integer().
 get_expiration(ZoneName) ->
-    {ok, #zone{} = Zone} = erldns_zone_cache:get_zone_with_records(ZoneName),
-    [#dns_rr{data = #dns_rrdata_soa{expire = Expire}}] = Zone#zone.authority,
-    Expire + timestamp().
+    case erldns_zone_cache:get_zone(ZoneName) of
+        {ok, #zone{authority = [#dns_rr{data = #dns_rrdata_soa{expire = Expire}}]}} ->
+            Expire + timestamp();
+        {error, Reason} ->
+            {error, Reason}
+    end.
 
 %% @doc This function takes a zone  and the orrdict to add entries in the zone expiration
 %% orddict.
@@ -226,46 +197,7 @@ add_zone_to_orddict(ZoneName, BindIP, Orddict) when is_binary(ZoneName) ->
             Orddict
     end;
 add_zone_to_orddict(#zone{name = ZoneName, authority = [#dns_rr{data = ZoneAuth}]}, BindIP, Orddict) ->
-    Expiration = ZoneAuth#dns_rrdata_soa.expire + timestamp(),
-    ArgsToSendAXFR = {ZoneName, BindIP},
-    orddict:append(Expiration, ArgsToSendAXFR, Orddict).
-
-%% @doc This function takes a list of zone names and deletes them from the orrdict.
--spec delete_zones_from_orddict(list(term()), orddict:orddict()) -> orddict:orddict().
-delete_zones_from_orddict([], NewOrddict) ->
-    NewOrddict;
-delete_zones_from_orddict([DeletedZone | Tail], NewOrddict) ->
-    delete_zones_from_orddict(Tail, delete_zone_from_orddict(DeletedZone, NewOrddict)).
-
-%% @doc This function takes a zone name and the orrdict to delete entries in the zone expiration
-%% orddict.
-%% @end
--spec delete_zone_from_orddict(binary(), orddict:orddict()) -> orddict:orddict().
-delete_zone_from_orddict(ok, Orddict) ->
-    %% This case was presented to take care of when no zones were deleted.
-    Orddict;
-delete_zone_from_orddict(ZoneName, Orddict) ->
-    delete_zone_from_orddict(ZoneName, orddict:to_list(Orddict), []).
-
-delete_zone_from_orddict(_ZoneName, [], Acc) ->
-    orddict:from_list(Acc);
-delete_zone_from_orddict(ZoneName, [{Expiration, ZoneArgs} | Tail], Acc) ->
-    case process_args(ZoneName, ZoneArgs) of
-        [] ->
-            delete_zone_from_orddict(ZoneName, Tail, Acc);
-        NewArgs ->
-            delete_zone_from_orddict(ZoneName, Tail, [{Expiration, NewArgs} | Acc])
-    end.
-
-process_args(ZoneName, ZoneArgs) ->
-    process_args(ZoneName, ZoneArgs, []).
-
-process_args(_ZoneName, [], Acc) ->
-    Acc;
-process_args(ZoneName, [{Name, _ServerIP} | Tail], Acc) when ZoneName =:= Name ->
-    process_args(ZoneName, Tail, Acc);
-process_args(ZoneName, [Args | Tail], Acc) ->
-    process_args(ZoneName, Tail, [Args | Acc]).
+    orddict:append(ZoneAuth#dns_rrdata_soa.expire + timestamp(), {ZoneName, BindIP}, Orddict).
 
 timestamp() ->
     {TM, TS, _} = os:timestamp(),
