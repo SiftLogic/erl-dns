@@ -171,9 +171,18 @@ create_new_zone_expiration_orddict(ExpirationKey, Orddict0, ListOfExpiredZones) 
                                %%Zone must have been deleted. Dont append it.
                                Orddict;
                            Expiration ->
+                               {ok, #zone{notify_source = NotifySource}} = erldns_zone_cache:get_zone(ZoneName),
+                               try erldns_zone_transfer_worker:send_axfr(ZoneName, BindIP, NotifySource)
+                               catch
+                                   exit:normal -> ok;
+                                   error:Reason ->
+                                       erldns_log:warning("Could not refresh zone ~p, requested from ~p"
+                                                          " for reason ~p",
+                                                          [ZoneName, NotifySource, Reason])
+                               end,
                                orddict:append(Expiration, Args, Orddict)
                        end
-                   end || {ZoneName, _BindIP} = Args <- ListOfExpiredZones]).
+                   end || {ZoneName, BindIP} = Args <- ListOfExpiredZones]).
 
 %% @doc Gets the expiration of the given zone name
 -spec get_expiration(binary()) -> integer().
