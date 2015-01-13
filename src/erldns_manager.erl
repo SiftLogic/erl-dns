@@ -123,7 +123,6 @@ check_for_new_zones(OldZones, BindIP, Orddict, [Zone | Tail]) ->
         true ->
             check_for_new_zones(OldZones, BindIP, Orddict, Tail);
         false ->
-            erldns_log:info("new zone: ~p", [Zone]),
             check_for_new_zones(OldZones, BindIP, add_zone_to_orddict(Zone, BindIP, Orddict), Tail)
     end.
 
