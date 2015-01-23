@@ -58,19 +58,19 @@ handle_call(_Request, _From, State) ->
 
 handle_cast({send_notify, {_BindIP, _DestinationIP, _ZoneName, _ZoneClass} = Args}, State) ->
     Spec = ?TRANSFER_WORKER(send_notify, Args),
-    supervisor:start_child(erldns_zone_transfer_sup, Spec),
+    {ok, _Pid} = supervisor:start_child(erldns_zone_transfer_sup, Spec),
     {noreply, State, ?REFRESH_INTERVAL};
 handle_cast({handle_notify, {_Message, _ClientIP, _ServerIP} = Args}, State) ->
     Spec = ?TRANSFER_WORKER(handle_notify, Args),
-    supervisor:start_child(erldns_zone_transfer_sup, Spec),
+    {ok, _Pid} = supervisor:start_child(erldns_zone_transfer_sup, Spec),
     {noreply, State, ?REFRESH_INTERVAL};
 handle_cast({send_axfr, {_ZoneName, _ServerIP} = Args}, State) ->
     Spec = ?TRANSFER_WORKER(send_axfr, Args),
-    supervisor:start_child(erldns_zone_transfer_sup, Spec),
+    {ok, _Pid} = supervisor:start_child(erldns_zone_transfer_sup, Spec),
     {noreply, State, ?REFRESH_INTERVAL};
 handle_cast({send_zone_name_request, {_Bin, {_MasterIP, _Port}, _BindIP} = Args}, State) ->
     Spec = ?TRANSFER_WORKER(send_zone_name_request, Args),
-    supervisor:start_child(erldns_zone_transfer_sup, Spec),
+    {ok, _Pid} = supervisor:start_child(erldns_zone_transfer_sup, Spec),
     {noreply, State, ?REFRESH_INTERVAL};
 handle_cast(_Request, State) ->
     erldns_log:info("Some other message: ~p", [_Request]),
