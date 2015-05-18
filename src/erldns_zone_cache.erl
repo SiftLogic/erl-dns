@@ -418,11 +418,21 @@ zone_names_and_versions() ->
                          end, [], zones).
 
 %% @doc Return a list of zone names that are currently stored.
--spec zone_names() -> [{dns:dname()}].
+-spec zone_names() -> [dns:dname()].
 zone_names() ->
-    erldns_storage:foldl(fun(#zone{name = Name}, Names) ->
-                                 [Name | Names]
-                         end, [], zones).
+    Zones = erldns_storage:list_table(zones),
+    get_names(Zones).
+
+-spec get_names([{binary(), #zone{}}] | [#zone{}]) -> [dns:dname()].
+get_names(Zones) ->
+    get_names(Zones, []).
+
+get_names([], Acc) ->
+    Acc;
+get_names([#zone{name = Name} | Tail], Acc) ->
+    get_names(Tail, [Name | Acc]);
+get_names([{Name, #zone{}} | Tail], Acc) ->
+    get_names(Tail, [Name | Acc]).
 
 %% -----------------------------------------------------------------------------------------------
 %% Write API
