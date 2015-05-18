@@ -202,5 +202,7 @@ mod(geolocation) ->
     erldns_storage_mnesia;
 mod(lookup_table) ->
     erldns_storage_json;
+mod(schema) ->
+    erldns_storage_mnesia;
 mod(_Table) ->
     erldns_config:storage_type().
