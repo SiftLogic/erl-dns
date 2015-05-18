@@ -1,6 +1,6 @@
 .PHONY: all test clean
 
-all: clean build-all
+all: build-all
 
 build-all:
 	./rebar get-deps compile
