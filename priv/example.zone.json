@@ -22,19 +22,52 @@
                 }
             },
             {
-                "name": "example.com",
+                "name": "_geo.us-east.*.example.com",
+                "type": "A",
+                "ttl": 3600,
+                "data": {
+                    "ip": "7.7.7.7"
+                }
+            },
+            {
+                "name": "_geo.us-east.example.com",
+                "type": "A",
+                "ttl": 3600,
+                "data": {
+                    "ip": "4.3.2.1"
+                }
+            },
+            {
+                "name": "_geo.us-east.example.com",
+                "type": "AAAA",
+                "ttl": 3600,
+                "data": {
+                    "ip": "2001:6A8:0:1:210:4BFF:FE4B:4C61"
+                }
+            },
+            {
+                "name": "_geo.us-east.example.com",
+                "type": "MX",
+                "ttl": 3600,
+                "data": {
+                    "preference": 10,
+                    "exchange": "mail.example.com"
+                }
+            },
+            {
+                "name": "_geo.europe.example.com",
+                "type": "A",
+                "ttl": 3600,
+                "data": {
+                    "ip": "1.1.1.1"
+                }
+            },
+            {
+                "name": "*.example.com",
                 "type": "A",
                 "ttl": 3600,
                 "data": {
                     "ip": "1.2.3.4"
-                }
-            },
-            {
-                "name": "example.com",
-                "type": "A",
-                "ttl": 3600,
-                "data": {
-                    "ip": "12.12.13.14"
                 }
             },
             {
@@ -79,11 +112,43 @@
                 }
             },
             {
+                "name": "_geo.us-east.example.com",
+                "type": "TXT",
+                "ttl": 3600,
+                "data": {
+                    "txt": "\"Test record for region\""
+                }
+            },
+            {
+                "name": "_geo.us-west.example.com",
+                "type": "TXT",
+                "ttl": 3600,
+                "data": {
+                    "txt": "\"Test record for region\""
+                }
+            },
+            {
                 "name": "ns2.example.com",
                 "type": "A",
                 "ttl": 3600,
                 "data": {
                     "ip": "127.0.0.1"
+                }
+            },
+            {
+                "name": "ns2.example.com",
+                "type": "A",
+                "ttl": 3600,
+                "data": {
+                    "ip": "8.8.8.8"
+                }
+            },
+            {
+                "name": "ns2.example.com",
+                "type": "A",
+                "ttl": 3600,
+                "data": {
+                    "ip": "192.1.4.32"
                 }
             },
             {

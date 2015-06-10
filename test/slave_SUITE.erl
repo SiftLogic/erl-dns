@@ -71,8 +71,7 @@ query_for_updated_records(_Config) ->
     {ok, Zone} = erldns_zone_cache:get_zone(<<"example.com">>),
     NewRecords = erldns_zone_transfer_worker:query_for_records(Zone#zone.notify_source, hd(erldns_config:get_address(inet)), Records),
     io:format("New records from master: ~p~n", [NewRecords]),
-    %% If we got the same amount of records we queried for, the test passed.
-    case length(NewRecords) =:= length(Records) of
+    case length(NewRecords) > 0 of
         true ->
             ok;
         false ->
@@ -187,7 +186,7 @@ test_master_hidden(_Config) ->
     end.
 
 test_zone_add_delete_sync(_Config) ->
-    {MasterIP, Port} = erldns_config:get_master(),
+    {MasterIP, _Port} = erldns_config:get_master(),
     DNS = [
            #dns_rr{name = <<"test.com">>,class = 1,
                    type = 6,ttl = 3600,

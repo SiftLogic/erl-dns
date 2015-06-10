@@ -23,6 +23,7 @@
 -export([notice/1, notice/2]).       %% normal, but significant, condition
 -export([info/1, info/2]).           %% informational message
 -export([debug/1, debug/2]).         %% debug-level message
+-export([trace/0]).
 
 emergency(Format) ->
     emergency(Format, []).
@@ -114,3 +115,8 @@ oneline([]) -> [].
 
 newline([$\s | Rest]) -> newline(Rest);
 newline(Rest) -> oneline(Rest).
+
+trace() ->
+    %%The answer to the universe.
+    Trace = try throw(42) catch 42 -> erlang:get_stacktrace() end,
+    erlang:display(Trace).

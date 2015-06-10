@@ -24,7 +24,8 @@
          select/2,
          select/3,
          foldl/3,
-         empty_table/1]).
+         empty_table/1,
+         list_table/1]).
 
 %% Public API
 %% @doc Create ets table wrapper. Use match cases for adding different options to the table.
@@ -71,6 +72,18 @@ create(host_throttle) ->
         undefined ->
             case ets:new(host_throttle, [set, public, named_table]) of
                 host_throttle ->
+                    ok;
+                Error ->
+                    {error, Error}
+            end;
+        _InfoList ->
+            ok
+    end;
+create(lookup_table) ->
+    case ets:info(lookup_table) of
+        undefined ->
+            case ets:new(lookup_table, [public, named_table, bag]) of
+                lookup_table ->
                     ok;
                 Error ->
                     {error, Error}
@@ -131,8 +144,8 @@ backup_tables() ->
 
 %% @doc Select from ets using key, value.
 -spec select(atom(), term()) -> tuple().
-select(Key, Value) ->
-    ets:lookup(Key, Value).
+select(Table, Key) ->
+    ets:lookup(Table, Key).
 
 %% @doc Select from ets using match specs.
 -spec select(atom(), list(), integer()) -> tuple() | '$end_of_table'.
@@ -149,3 +162,12 @@ foldl(Fun, Acc, Table) ->
 empty_table(Table) ->
     ets:delete_all_objects(Table),
     ok.
+
+%% @doc Lists the ets table
+-spec list_table(atom()) -> term() | {error, term()}.
+list_table(TableName) ->
+    try ets:tab2list(TableName)
+    catch
+        error:R ->
+            {error, R}
+    end.

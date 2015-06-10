@@ -54,7 +54,11 @@
          get_admin/0,
          get_mode/0,
          get_crypto/0,
-         is_test/0]).
+         get_primary_mounted_ip/0,
+         is_test/0,
+         supports_geo/0,
+         keyget/2,
+         keyget/3]).
 
 -define(DEFAULT_IPV4_ADDRESS, {127,0,0,1}).
 -define(DEFAULT_IPV6_ADDRESS, {0,0,0,0,0,0,0,1}).
@@ -204,31 +208,31 @@ zone_server_env() ->
     ZoneServerEnv.
 
 zone_server_max_processes() ->
-    proplists:get_value(max_processes, zone_server_env(), 16).
+    keyget(max_processes, zone_server_env(), 16).
 
 zone_server_protocol() ->
-    proplists:get_value(protocol, zone_server_env(), "https").
+    keyget(protocol, zone_server_env(), "https").
 
 zone_server_host() ->
-    proplists:get_value(host, zone_server_env(), "localhost").
+    keyget(host, zone_server_env(), "localhost").
 
 zone_server_port() ->
-    proplists:get_value(port, zone_server_env(), ?DEFAULT_ZONE_SERVER_PORT).
+    keyget(port, zone_server_env(), ?DEFAULT_ZONE_SERVER_PORT).
 
 websocket_env() ->
-    proplists:get_value(websocket, zone_server_env(), []).
+    keyget(websocket, zone_server_env(), []).
 
 websocket_protocol() ->
-    proplists:get_value(protocol, websocket_env(), wss).
+    keyget(protocol, websocket_env(), wss).
 
 websocket_host() ->
-    proplists:get_value(host, websocket_env(), zone_server_host()).
+    keyget(host, websocket_env(), zone_server_host()).
 
 websocket_port() ->
-    proplists:get_value(port, websocket_env(), zone_server_port()).
+    keyget(port, websocket_env(), zone_server_port()).
 
 websocket_path() ->
-    proplists:get_value(path, websocket_env(), ?DEFAULT_WEBSOCKET_PATH).
+    keyget(path, websocket_env(), ?DEFAULT_WEBSOCKET_PATH).
 
 websocket_url() ->
     atom_to_list(websocket_protocol()) ++ "://" ++ websocket_host() ++ ":" ++ integer_to_list(websocket_port()) ++ websocket_path().
@@ -315,6 +319,15 @@ get_crypto() ->
             {keyget(key, Crypto), keyget(vector, Crypto)}
     end.
 
+get_primary_mounted_ip() ->
+    case application:get_env(erldns, primary_mounted_ip) of
+        undefined ->
+            erldns_log:warning("No primary mounted IP configured."),
+            {127, 0 ,0, 1};
+        {ok, IP} ->
+            IP
+    end.
+
 get_mode() ->
     case application:get_env(erldns, mode) of
         undefined ->
@@ -335,6 +348,23 @@ is_test() ->
             false
     end.
 
+supports_geo() ->
+    case application:get_env(erldns, support_geo) of
+        {ok, true} ->
+            true;
+        {ok, false} ->
+            false;
+        undefined ->
+            false
+    end.
+
 keyget(Key, Data) ->
-    {Key, Value} = lists:keyfind(Key, 1, Data),
-    Value.
+    keyget(Key, Data, undefined).
+
+keyget(Key, Data, Default) ->
+    case lists:keyfind(Key, 1, Data) of
+        false ->
+            Default;
+        {Key, Value} ->
+            Value
+    end.
