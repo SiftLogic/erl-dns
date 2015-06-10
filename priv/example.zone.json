@@ -1,6 +1,11 @@
 [
     {
         "name": "example.com",
+        "allow_notify": ["10.1.10.51"],
+        "allow_transfer": ["127.0.0.1"],
+        "allow_update": ["127.0.0.1", "10.1.10.51"],
+        "also_notify": ["127.0.0.1", "10.1.10.51"],
+        "notify_source": "10.1.10.51",
         "records": [
             {
                 "name": "example.com",
@@ -12,12 +17,53 @@
                     "serial": 2013022001,
                     "refresh": 86400,
                     "retry": 7200,
-                    "expire": 604800,
+                    "expire": 5,
                     "minimum": 300
                 }
             },
             {
-                "name": "example.com",
+                "name": "_geo.us-east.*.example.com",
+                "type": "A",
+                "ttl": 3600,
+                "data": {
+                    "ip": "7.7.7.7"
+                }
+            },
+            {
+                "name": "_geo.us-east.example.com",
+                "type": "A",
+                "ttl": 3600,
+                "data": {
+                    "ip": "4.3.2.1"
+                }
+            },
+            {
+                "name": "_geo.us-east.example.com",
+                "type": "AAAA",
+                "ttl": 3600,
+                "data": {
+                    "ip": "2001:6A8:0:1:210:4BFF:FE4B:4C61"
+                }
+            },
+            {
+                "name": "_geo.us-east.example.com",
+                "type": "MX",
+                "ttl": 3600,
+                "data": {
+                    "preference": 10,
+                    "exchange": "mail.example.com"
+                }
+            },
+            {
+                "name": "_geo.europe.example.com",
+                "type": "A",
+                "ttl": 3600,
+                "data": {
+                    "ip": "1.1.1.1"
+                }
+            },
+            {
+                "name": "*.example.com",
                 "type": "A",
                 "ttl": 3600,
                 "data": {
@@ -66,6 +112,54 @@
                 }
             },
             {
+                "name": "_geo.us-east.example.com",
+                "type": "TXT",
+                "ttl": 3600,
+                "data": {
+                    "txt": "\"Test record for region\""
+                }
+            },
+            {
+                "name": "_geo.us-west.example.com",
+                "type": "TXT",
+                "ttl": 3600,
+                "data": {
+                    "txt": "\"Test record for region\""
+                }
+            },
+            {
+                "name": "ns2.example.com",
+                "type": "A",
+                "ttl": 3600,
+                "data": {
+                    "ip": "127.0.0.1"
+                }
+            },
+            {
+                "name": "ns2.example.com",
+                "type": "A",
+                "ttl": 3600,
+                "data": {
+                    "ip": "8.8.8.8"
+                }
+            },
+            {
+                "name": "ns2.example.com",
+                "type": "A",
+                "ttl": 3600,
+                "data": {
+                    "ip": "192.1.4.32"
+                }
+            },
+            {
+                "name": "example.com",
+                "type": "NS",
+                "ttl": 3600,
+                "data": {
+                    "dname": "ns3.example.com"
+                }
+            },
+            {
                 "name": "example.com",
                 "type": "TXT",
                 "ttl": 3600,
@@ -92,7 +186,6 @@
                     "ip": "50.40.50.40"
                 }
             }
-
         ]
     }
 ]
